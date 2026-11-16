@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Do Bike Lanes Sell More Coffee? (Redpen demo deck)</title>
+<!-- A small hand-written deck for trying Redpen. The data is made up, and a few flaws are left in on purpose:
+     a typo, a sentence that is far too long, a chart that is too small. Mark them up, then let your agent fix them. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #1F2430; overflow: hidden; }
+  body { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #1E2A3A; }
+  .slide { display: none; position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; box-sizing: border-box;
+           padding: 64px 80px; background: #FFFDF8; transform-origin: 0 0; box-shadow: 0 6px 40px rgba(0, 0, 0, .45); }
+  .slide.active { display: block; }
+  .slide h1 { font-size: 64px; line-height: 1.1; margin: 150px 0 24px; letter-spacing: -1px; }
+  .slide h2 { font-size: 44px; margin: 0 0 36px; letter-spacing: -.5px; }
+  .slide p, .slide li { font-size: 28px; line-height: 1.45; }
+  .slide li { margin-bottom: 14px; }
+  .sub { font-size: 30px; color: #5B6B80; }
+  .by { position: absolute; left: 80px; bottom: 64px; font-size: 22px; color: #8493A6; }
+  .cols { display: flex; gap: 56px; align-items: center; }
+  .cols > * { flex: 1; }
+  figure { margin: 0; }
+  figcaption { font-size: 18px; color: #8493A6; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 26px; }
+  th, td { text-align: left; padding: 14px 18px; border-bottom: 2px solid #E6E1D6; }
+  th { color: #5B6B80; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .big { font-size: 40px; font-weight: 700; color: #C8452F; }
+  .no { position: absolute; right: 40px; bottom: 28px; font-size: 18px; color: #A9B4C2; }
+  aside.notes { display: none; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <h1>Do Bike Lanes Sell More Coffee?</h1>
+  <p class="sub">A 12-week look at four streets and eleven cafés</p>
+  <p class="by">Demo deck for Redpen · the numbers are made up</p>
+  <aside class="notes">Open with the question. Say right away that this is a small study, not a causal claim.</aside>
+</section>
+
+<section class="slide">
+  <h2>Why we asked</h2>
+  <ul>
+    <li>Shop owners often oppose new bike lanes because they expect to lose customers who arrive by car.</li>
+    <li>Cafés recieve many short visits, so they should react quickly to a change in foot and bike traffic.</li>
+    <li>We wanted to know whether the cafés on streets that got a protected bike lane in the spring sold more or fewer drinks afterwards than they had sold before, compared with similar cafés on nearby streets that did not get a lane, while also keeping in mind the weather, the school holidays and one street festival.</li>
+  </ul>
+  <aside class="notes">Spend little time here. The third point is the research question; read it slowly.</aside>
+</section>
+
+<section class="slide">
+  <h2>What we measured</h2>
+  <div class="cols">
+    <figure style="flex: 0 0 300px">
+      <svg viewBox="0 0 300 200" width="300" height="200" role="img" aria-label="Drinks sold per day, before and after">
+        <line x1="40" y1="170" x2="290" y2="170" stroke="#8493A6" stroke-width="2"/>
+        <rect x="60" y="80" width="40" height="90" fill="#B9C4D2"/>
+        <rect x="104" y="52" width="40" height="118" fill="#C8452F"/>
+        <rect x="186" y="84" width="40" height="86" fill="#B9C4D2"/>
+        <rect x="230" y="80" width="40" height="90" fill="#C8452F"/>
+        <text x="102" y="190" font-size="13" text-anchor="middle" fill="#5B6B80">with new lane</text>
+        <text x="228" y="190" font-size="13" text-anchor="middle" fill="#5B6B80">without</text>
+        <text x="80" y="74" font-size="12" text-anchor="middle" fill="#5B6B80">212</text>
+        <text x="124" y="46" font-size="12" text-anchor="middle" fill="#C8452F">278</text>
+        <text x="206" y="78" font-size="12" text-anchor="middle" fill="#5B6B80">203</text>
+        <text x="250" y="74" font-size="12" text-anchor="middle" fill="#C8452F">211</text>
+      </svg>
+      <figcaption>Drinks sold per café per day. Grey: before. Red: after.</figcaption>
+    </figure>
+    <ul>
+      <li>Daily drink sales from the cafés' own tills</li>
+      <li>Six weeks before and six weeks after the lanes opened</li>
+      <li>Six cafés on streets with a new lane, five on streets without</li>
+    </ul>
+  </div>
+  <aside class="notes">Point at the two red bars. The left pair moves, the right pair hardly does.</aside>
+</section>
+
+<section class="slide">
+  <h2>Results</h2>
+  <table>
+    <tr><th>Streets</th><th>Before</th><th>After</th><th>Change</th></tr>
+    <tr><td>With a new bike lane</td><td class="num">212</td><td class="num">278</td><td class="num big">+31%</td></tr>
+    <tr><td>Without</td><td class="num">203</td><td class="num">211</td><td class="num">+4%</td></tr>
+  </table>
+  <p>Sales rose on both kinds of street, but much more where a lane opened.</p>
+  <aside class="notes">Give the two numbers, then pause. Mention that summer started during the study, which is why both rows go up.</aside>
+</section>
+
+<section class="slide">
+  <h2>Takeaways</h2>
+  <ul>
+    <li>In this small sample, cafés next to a new bike lane sold about a quarter more than comparable cafés.</li>
+    <li>Eleven cafés and one season: treat it as a hint, not as proof.</li>
+    <li>Next: repeat in autumn, and add shops that sell things you cannot carry on a bike.</li>
+  </ul>
+  <aside class="notes">End on the limits. Invite questions about the comparison streets.</aside>
+</section>
+
+<script>
+(function () {
+  var slides = [].slice.call(document.querySelectorAll('.slide')), cur = 0;
+  slides.forEach(function (s, i) {
+    var n = document.createElement('div');
+    n.className = 'no';
+    n.textContent = (i + 1) + ' / ' + slides.length;
+    s.appendChild(n);
+  });
+  function fit() {
+    var k = Math.min(innerWidth / 1280, innerHeight / 720) * 0.96;
+    slides.forEach(function (s) { s.style.transform = 'scale(' + k + ') translate(-50%, -50%)'; });
+  }
+  function go(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, k) { s.classList.toggle('active', k === cur); });
+    try { history.replaceState(null, '', '#' + (cur + 1)); } catch (_) {}
+  }
+  addEventListener('resize', fit);
+  addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'PageDown', ' '].indexOf(e.key) >= 0) { e.preventDefault(); go(cur + 1); }
+    if (['ArrowLeft', 'PageUp'].indexOf(e.key) >= 0) { e.preventDefault(); go(cur - 1); }
+  });
+  fit();
+  go((+location.hash.slice(1) || 1) - 1);
+})();
+</script>
+</body>
+</html>

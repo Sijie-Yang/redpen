@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Redpen">
+  <rect width="128" height="128" rx="28" fill="#E5372B"/>
+  <path d="M19 99 q7 -11 14 0 t14 0 t14 -1 q4 -5 9 -6" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(90 60) rotate(35) scale(.9)">
+    <path d="M-12 -40 a8 8 0 0 1 8 -8 h8 a8 8 0 0 1 8 8 v54 l-12 27 l-12 -27 z" fill="#fff"/>
+    <rect x="-12" y="-33" width="24" height="7" fill="#E5372B" opacity=".9"/>
+    <path d="M-4.6 30.6 h9.2 l-4.6 10.4 z" fill="#8E1B13"/>
+  </g>
+</svg>

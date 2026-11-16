@@ -1,0 +1,8 @@
+# Review notes are private and stay next to the reviewed file
+*.review/
+_review/
+
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
