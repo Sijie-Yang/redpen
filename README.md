@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Mark it up like a teacher. Your AI agent makes the edits.</b><br>
-  Review slides, papers, posters and figures in the browser or by hand on an iPad,<br>
+  Review slides, papers, posters and figures in the browser or by hand on an iPad,
   then hand the notes to Claude Code, Codex or any other coding agent.
 </p>
 
