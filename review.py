@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Redpen: mark up a file in the browser, then let an AI agent apply the notes.
 
-    python3 review.py FILE [--port N] [--no-open] [--source F] [--build CMD] [--slides CSS] [--notes CSS] [--page]
+    python3 review.py FILE [--port N] [--no-open] [--source F] [--build CMD] [--slides CSS] [--notes CSS] [--page] [--lang en|zh]
     python3 review.py show FILE       print the current annotations as text
     python3 review.py prompt FILE     print the instruction to paste to an agent
     python3 review.py archive FILE [--summary TEXT]     close the round after the notes were applied
@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 TOOL = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 UPLOAD = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
@@ -58,6 +58,133 @@ LAYOUTS = {"auto": "由 AI 决定", "fig": "标题 + 一张大图", "figtext": "
 IMGMODES = {"add": "放在这个位置", "replace": "替换下面这张图", "ref": "只是参考，不放进去"}
 STATUS = {"done": "已改", "partial": "部分已改", "skipped": "没有改"}
 
+# Interface language. Chinese is the source text and EN holds the translations (app.js has its own table for the page).
+# Notes are written in the language of the page they were made on ("lang" in annotations.json); what this program
+# prints follows --lang, then REDPEN_LANG, then the system.
+EN = {
+    # categories, note types, page operations, layouts, results
+    "评论": "Comment", "改文字": "Change text", "加图 / 换图": "Add / replace image", "版式": "Layout", "删掉": "Delete", "其他": "Other",
+    "点评": "Pin", "框选": "Box", "选中元素": "Element", "选中文字": "Selected text", "直接改字": "Edited text", "加图": "Image",
+    "手绘": "Drawing", "箭头": "Arrow", "整页意见": "Page comment", "新增一页": "New page", "删除此页": "Delete this page",
+    "移动此页": "Move this page", "修改讲稿": "Speaker notes", "整页操作": "Page operation", "手写批注": "Handwriting",
+    "前面加一页": "Add page before", "后面加一页": "Add page after",
+    "这页不要动": "Do not touch this page", "拆成两页": "Split into two pages", "和下一页合并": "Merge with the next page",
+    "移到备用页": "Move to backup", "短版本里跳过": "Skip in the short version", "复制这一页再改": "Duplicate this page and change the copy",
+    "由 AI 决定": "Let the AI decide", "标题 + 一张大图": "Title + one large figure", "左图右文": "Figure left, text right",
+    "标题 + 要点": "Title + bullets", "表格": "Table", "左右对比": "Side-by-side comparison", "整页一张图": "One full-page image",
+    "照本页的版式": "Same layout as this page",
+    "放在这个位置": "Place it here", "替换下面这张图": "Replace the image underneath", "只是参考，不放进去": "Only a reference, do not insert it",
+    "已改": "Done", "部分已改": "Partly done", "没有改": "Not done",
+    # annotations.md
+    "# 修改意见：{name}\n\n目前没有标注。\n": "# Review notes: {name}\n\nThere are no notes at the moment.\n",
+    "# 修改意见：{name}": "# Review notes: {name}",
+    "- 审阅的文件：`{path}`（{kind}）": "- File under review: `{path}` ({kind})",
+    "图片|kind": "image", "图片文件夹": "folder of images",
+    "- 要改的源文件：`{src}`": "- Source file to edit: `{src}`",
+    "- 改完后在 `{dir}` 运行：`{cmd}`": "- After editing, run in `{dir}`: `{cmd}`",
+    "- 每条后面的“TeX 位置”来自 SyncTeX，是这处内容在源文件里的行号，可以直接去改":
+        "- The “TeX” line of a note comes from SyncTeX: it is the line of the source file where that content is, so go straight there",
+    "- 这个 PDF 没有 SyncTeX 信息：用每条的“原文 / 对象”在 .tex 里搜索来定位（编译时加 -synctex=1 以后会直接给出行号）":
+        "- This PDF has no SyncTeX data: find each note by searching the .tex for its “Original” / “Target” text (compile with -synctex=1 and the next round gives line numbers)",
+    "- “手写批注”是从另外批注过的副本里找出来的笔迹：内容在图片里，必须打开图片读":
+        "- “Handwriting” notes are marks found in a copy that was annotated elsewhere: the content is in the image, so you must open the image",
+    "- 共 {n} 条，文件版本 {build}": "- Notes: {n}; file version {build}",
+    "（文件现在的版本是 {build}，标注之后文件改过）": " (the file is now at version {build}: it changed after the notes were made)",
+    "- 坐标以每页左上角为原点，单位是该页自己的像素，页面尺寸写在每页标题后面":
+        "- Coordinates have their origin at the top-left of each page and are in that page's own pixels; the page size follows each page heading",
+    "；PDF 按 {dpi} dpi 渲染，像素 ÷ {dpi} × 72 = pt": "; PDF pages are rendered at {dpi} dpi, so pixel ÷ {dpi} × 72 = pt",
+    "- 每条的完整数据（目标元素的路径、原文、图片路径）在 `{name}` 里，用 id 对应":
+        "- The full data of each note (path of the target element, original text, image paths) is in `{name}`; match by id",
+    "## 总体意见": "## General comments", "## 本轮修改说明": "## Summary of this round",
+    "（{w} × {h}）": "({w} × {h})", "整页": "Whole page", "第 {n} 页": "Page {n}",
+    "｜": " | ", "：": ": ", "，": ", ", "（": " (", "）": ")", "【": "[", "】": "]",
+    "【重要】": "[IMPORTANT]", "【所有页同样处理】": "[ALL PAGES]",
+    " 位置 ({x}, {y})": " at ({x}, {y})", " 区域 x={x} y={y} 宽={w} 高={h}": " region x={x} y={y} w={w} h={h}",
+    " 从 ({x}, {y}) 到 ({x2}, {y2})": " from ({x}, {y}) to ({x2}, {y2})",
+    "用法": "Use", "对象": "Target", "指向": "Points to", "原文": "Original", "改成": "Change to", "新页": "New page", "移到": "Move to",
+    "新讲稿": "New speaker notes", "意见": "Comment", "TeX 位置": "TeX", "笔迹截图（打开看）": "Handwriting crop (open it)",
+    "图片": "Images", "图片|one": "Image", "整页（带批注）": "Annotated page", "处理结果": "Result",
+    "{title}（放在{page}{pos}，版式：{layout}）": "{title} (placed {pos} {page}; layout: {layout})",
+    "（标题未填）": "(no title given)", "这页": "this page", "之前": "before", "之后": "after",
+    "{page}｜{title} {pos}": "{pos} {page} | {title}", "（未选位置）": "(no position chosen)",
+    # the instruction for the agent
+    "请按我在审阅工具里留的标注修改：{path}": "Please apply the notes I left in the review tool (Redpen) to: {path}",
+    "1. 先读标注清单：{md}": "1. Read the list of notes first: {md}",
+    "2. 需要坐标、目标元素或图片时查：{ann}（我附的截图和图片在 {images}/）":
+        "2. For coordinates, target elements or images, look in: {ann} (the screenshots and pictures I attached are in {images}/)",
+    "要改的源文件是 {src}": "The source file to edit is {src}", "直接改上面这个文件": "Edit the file above directly",
+    "；改完在 {dir} 运行 `{cmd}`": "; after editing, run `{cmd}` in {dir}",
+    "3. 先确认这个文件是手写的还是由别的源文件生成的，改源文件":
+        "3. First find out whether this file is hand-written or generated from another source file; edit the source",
+    "（图片和 PDF 要改生成它的源文件，然后重新导出）": " (for an image or a PDF, edit what produces it, then export it again)",
+    "4. 规则和数据格式见：{agents}": "4. Rules and data format: {agents}",
+    "5. 改完后在 annotations.json 里给每条写上 status 和 reply，然后运行：python3 {tool} archive \"{path}\" --summary \"一句话说明改了什么\"":
+        "5. When you are done, write a status and a reply on each note in annotations.json, then run: python3 {tool} archive \"{path}\" --summary \"one line on what changed\"",
+    # the command line
+    "找不到文件：{p}": "File not found: {p}",
+    "不支持的格式：{name}（支持 HTML、PDF、图片，或一个装图片的文件夹；PPT 请先导出成 PDF）":
+        "Unsupported format: {name} (supported: HTML, PDF, images, or a folder of images; export PowerPoint to PDF first)",
+    "打开 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）。也可以先把 PDF 导出成 PNG 再打开。":
+        "Opening a PDF needs pdftoppm (macOS: brew install poppler; Linux: apt install poppler-utils). You can also export the PDF to PNG images and open those.",
+    "读 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）":
+        "Reading a PDF needs pdftoppm (macOS: brew install poppler; Linux: apt install poppler-utils)",
+    "导入手写批注需要 Pillow 和 numpy：pip install pillow numpy": "Importing handwriting needs Pillow and numpy: pip install pillow numpy",
+    "HTML 不能直接对比。请把它导出的 PDF 作为 FILE：review.py import 原始.pdf 批注过的.pdf":
+        "HTML cannot be compared directly. Use its PDF export as FILE: review.py import original.pdf annotated.pdf",
+    "需要两个文件：没批注的原件和批注过的副本": "Two files are needed: the untouched original and the annotated copy",
+    "注意：原件 {a} 页，批注件 {b} 页，只对比前 {m} 页": "Note: the original has {a} pages and the annotated copy {b}; only the first {m} are compared",
+    "这一页和原件整体不同，请看整页图": "This whole page differs from the original; look at the image of the page",
+    "没有发现和原件不同的地方。确认批注件是在同一份原件上写的。":
+        "No difference from the original was found. Check that the annotated copy was made from this same original.",
+    "找到 {n} 处手写批注，已写入 {ann}\n文字清单：{md}\n每处的笔迹截图在 {images}/（需要看图才能读出内容）":
+        "Found {n} handwritten marks, written to {ann}\nAs text: {md}\nA crop of each mark is in {images}/ (the content can only be read from the images)",
+    "这个文件夹里没有图片": "There are no images in this folder",
+    "需要从这台电脑打开，或用带口令的链接打开。": "Open this page on the computer itself, or with the link that carries the token.",
+    "{name}: {n} 页": "{name}: {n} pages",
+    "端口 {a}–{b} 都被占用了，用 --port 换一个": "Ports {a}–{b} are all taken; choose another one with --port",
+    "Redpen: {url}\n  文件: {path}\n  标注: {ann}": "Redpen: {url}\n  File:  {path}\n  Notes: {ann}",
+    "  iPad 或其他设备（同一个 Wi-Fi 或 Tailscale）打开: {url}": "  On an iPad or another device (same Wi-Fi or Tailscale) open: {url}",
+    "  按 Ctrl+C 停止": "  Ctrl+C stops the server", "\n已停止": "\nStopped",
+    "已归档到 {dest}": "Archived to {dest}", "没有需要归档的标注": "There are no notes to archive",
+}
+UI_LANG = None    # set by --lang or REDPEN_LANG: the language a review page starts in, until the reviewer switches it there
+_lang = None
+
+
+def system_lang():
+    """"zh" when the system is set up for Chinese, also as a second language on macOS; otherwise "en"."""
+    seen = [os.environ.get(k, "") for k in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE")]
+    try:
+        import locale
+        seen.append(locale.getlocale()[0] or "")
+    except Exception:
+        pass
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=3).stdout
+            seen += re.findall(r"[A-Za-z][-\w]*", out)
+        except Exception:
+            pass
+    return "zh" if any(s.lower().startswith(("zh", "chinese")) for s in seen) else "en"
+
+
+def cli_lang():
+    global _lang
+    if _lang is None:
+        v = (os.environ.get("REDPEN_LANG") or "").lower()[:2]
+        _lang = v if v in ("en", "zh") else system_lang()
+    return _lang
+
+
+def tr(s, lang=None, **kw):
+    """Interface text in a language ("en" or "zh"; default: the command line's). A "|context" suffix tells two uses of one word apart."""
+    if s is None:
+        return s
+    if (lang or cli_lang()) == "en":
+        s = EN.get(s, s)
+    s = re.sub(r"\|[a-z]+$", "", s)
+    return s.format(**kw) if kw else s
+
 
 class Target:
     """The file under review and the folder that holds its annotations."""
@@ -65,7 +192,7 @@ class Target:
     def __init__(self, path, opts=None):
         p = Path(path).expanduser().resolve()
         if not p.exists():
-            raise SystemExit(f"找不到文件：{p}")
+            raise SystemExit(tr("找不到文件：{p}", p=p))
         self.path, ext = p, p.suffix.lower()
         if p.is_dir():
             self.kind, self.review, self.docroot = "images", p / "_review", p
@@ -76,7 +203,7 @@ class Target:
         elif ext in IMG_EXT:
             self.kind = "image"
         else:
-            raise SystemExit(f"不支持的格式：{p.name}（支持 HTML、PDF、图片，或一个装图片的文件夹；PPT 请先导出成 PDF）")
+            raise SystemExit(tr("不支持的格式：{name}（支持 HTML、PDF、图片，或一个装图片的文件夹；PPT 请先导出成 PDF）", name=p.name))
         if not p.is_dir():
             self.review, self.docroot = p.with_name(p.name + ".review"), p.parent
         self.images, self.archive = self.review / "images", self.review / "archive"
@@ -121,7 +248,7 @@ class Target:
             if not (stamp.exists() and stamp.read_text() == key):
                 exe = shutil.which("pdftoppm")
                 if not exe:
-                    raise SystemExit("打开 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）。也可以先把 PDF 导出成 PNG 再打开。")
+                    raise SystemExit(tr("打开 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）。也可以先把 PDF 导出成 PNG 再打开。"))
                 shutil.rmtree(out, ignore_errors=True)
                 out.mkdir(parents=True)
                 subprocess.run([exe, "-png", "-r", str(PDF_DPI), str(self.path), str(out / "p")], check=True)
@@ -129,10 +256,10 @@ class Target:
             return sorted(out.glob("p-*.png"), key=lambda f: natural(f.name))
         return []
 
-    def pages(self):
+    def pages(self, lang=None):
         base = "/pages/" if self.kind == "pdf" else "/doc/"
         fs = self.page_files()
-        return [{"title": (f"第 {i + 1} 页" if self.kind == "pdf" else f.name), "url": base + quote(f.name)} for i, f in enumerate(fs)]
+        return [{"title": (tr("第 {n} 页", lang, n=i + 1) if self.kind == "pdf" else f.name), "url": base + quote(f.name)} for i, f in enumerate(fs)]
 
     def pdf_text(self):
         """Words of a PDF with their boxes, per page, in pixels of the rendered page: [{w, h, blocks: [{x, y, w, h, lines: [{x, y, w, h, t}]}]}]."""
@@ -224,7 +351,7 @@ class Target:
     def info(self):
         return {"name": self.path.name, "path": str(self.path), "kind": self.kind, "frame": self.frame(), "build": self.build(),
                 "rev": self.rev(), "config": self.config, "source": self.source(), "review": str(self.review),
-                "annotations": str(self.ann), "text": str(self.md), "tool": str(TOOL), "dpi": PDF_DPI if self.kind == "pdf" else None,
+                "annotations": str(self.ann), "text": str(self.md), "tool": str(TOOL), "dpi": PDF_DPI if self.kind == "pdf" else None, "lang": UI_LANG,
                 "textLayer": self.kind == "html" or (self.kind == "pdf" and any(p["blocks"] for p in self.pdf_text()))}
 
     # -- stored notes --
@@ -297,71 +424,86 @@ class Target:
         return dest
 
     # -- text for people and agents --
-    def markdown(self, data=None):
+    def lang(self, data=None, lang=None):
+        """Language of the notes: the one asked for, else the one they were made in, else the command line's."""
+        if lang in ("en", "zh"):
+            return lang
         data = data if data is not None else self.load()
+        v = (data or {}).get("lang")
+        return v if v in ("en", "zh") else ("zh" if data and data.get("items") else cli_lang())
+
+    def markdown(self, data=None, lang=None):
+        data = data if data is not None else self.load()
+        lang = self.lang(data or {}, lang)
+        _ = lambda s, **kw: tr(s, lang, **kw)
         if not data or (not data.get("items") and not (data.get("general") or "").strip()):
-            return f"# 修改意见：{self.path.name}\n\n目前没有标注。\n"
+            return _("# 修改意见：{name}\n\n目前没有标注。\n", name=self.path.name)
         items = data.get("items", [])
-        L = [f"# 修改意见：{self.path.name}", "",
-             f"- 审阅的文件：`{self.path}`（{ {'html': 'HTML', 'pdf': 'PDF', 'image': '图片', 'images': '图片文件夹'}[self.kind] }）"]
+        kind = _({"html": "HTML", "pdf": "PDF", "image": "图片|kind", "images": "图片文件夹"}[self.kind])
+        L = [_("# 修改意见：{name}", name=self.path.name), "",
+             _("- 审阅的文件：`{path}`（{kind}）", path=self.path, kind=kind)]
         if self.source():
-            L.append(f"- 要改的源文件：`{self.source()}`")
+            L.append(_("- 要改的源文件：`{src}`", src=self.source()))
         if self.config.get("build"):
-            L.append(f"- 改完后在 `{self.path.parent}` 运行：`{self.config['build']}`")
+            L.append(_("- 改完后在 `{dir}` 运行：`{cmd}`", dir=self.path.parent, cmd=self.config["build"]))
         if self.kind == "pdf":
-            L.append("- 每条后面的“TeX 位置”来自 SyncTeX，是这处内容在源文件里的行号，可以直接去改" if any(i.get("tex") for i in items)
-                     else "- 这个 PDF 没有 SyncTeX 信息：用每条的“原文 / 对象”在 .tex 里搜索来定位（编译时加 -synctex=1 以后会直接给出行号）")
+            L.append(_("- 每条后面的“TeX 位置”来自 SyncTeX，是这处内容在源文件里的行号，可以直接去改") if any(i.get("tex") for i in items)
+                     else _("- 这个 PDF 没有 SyncTeX 信息：用每条的“原文 / 对象”在 .tex 里搜索来定位（编译时加 -synctex=1 以后会直接给出行号）"))
         if any(i.get("type") == "ink" for i in items):
-            L.append("- “手写批注”是从另外批注过的副本里找出来的笔迹：内容在图片里，必须打开图片读")
-        L.append(f"- 共 {len(items)} 条，文件版本 {data.get('build') or '?'}" + ("" if data.get("build") == self.build() else f"（文件现在的版本是 {self.build()}，标注之后文件改过）"))
-        L.append("- 坐标以每页左上角为原点，单位是该页自己的像素，页面尺寸写在每页标题后面" + (f"；PDF 按 {PDF_DPI} dpi 渲染，像素 ÷ {PDF_DPI} × 72 = pt" if self.kind == "pdf" else ""))
-        L.append(f"- 每条的完整数据（目标元素的路径、原文、图片路径）在 `{self.ann.name}` 里，用 id 对应")
+            L.append(_("- “手写批注”是从另外批注过的副本里找出来的笔迹：内容在图片里，必须打开图片读"))
+        L.append(_("- 共 {n} 条，文件版本 {build}", n=len(items), build=data.get("build") or "?")
+                 + ("" if data.get("build") == self.build() else _("（文件现在的版本是 {build}，标注之后文件改过）", build=self.build())))
+        L.append(_("- 坐标以每页左上角为原点，单位是该页自己的像素，页面尺寸写在每页标题后面")
+                 + (_("；PDF 按 {dpi} dpi 渲染，像素 ÷ {dpi} × 72 = pt", dpi=PDF_DPI) if self.kind == "pdf" else ""))
+        L.append(_("- 每条的完整数据（目标元素的路径、原文、图片路径）在 `{name}` 里，用 id 对应", name=self.ann.name))
         L.append("")
         if (data.get("general") or "").strip():
-            L += ["## 总体意见", data["general"].strip(), ""]
+            L += [_("## 总体意见"), data["general"].strip(), ""]
         if data.get("summary"):
-            L += ["## 本轮修改说明", str(data["summary"]).strip(), ""]
+            L += [_("## 本轮修改说明"), str(data["summary"]).strip(), ""]
         groups = {}
         for it in items:
             groups.setdefault((it.get("slide") or {}).get("n", 0), []).append(it)
         for n in sorted(groups):
             s = groups[n][0].get("slide") or {}
-            size = f"（{s.get('w')} × {s.get('h')}）" if s.get("w") else ""
-            L.append(f"## {s.get('page') or '整页'}｜{s.get('title') or ''} {size}".rstrip())
+            size = _("（{w} × {h}）", w=s.get("w"), h=s.get("h")) if s.get("w") else ""
+            L.append(f"## {s.get('page') or _('整页')}{_('｜')}{s.get('title') or ''} {size}".rstrip())
             for k, it in enumerate(groups[n]):
-                L += self.item_lines(k + 1, it)
+                L += self.item_lines(k + 1, it, lang)
             L.append("")
         return "\n".join(L)
 
     @staticmethod
-    def type_name(it):
+    def type_name(it, lang="zh"):
         t = it.get("type")
         if t == "op":
-            return OPS.get(it.get("op"), "整页操作")
+            return tr(OPS.get(it.get("op"), "整页操作"), lang)
         if t == "new":
-            return "前面加一页" if it.get("where") == "before" else "后面加一页"
-        return TYPES.get(t, t or "?")
+            return tr("前面加一页" if it.get("where") == "before" else "后面加一页", lang)
+        return tr(TYPES.get(t, t or "?"), lang)
 
-    def item_lines(self, k, it):
+    def item_lines(self, k, it, lang="zh"):
+        _ = lambda s, **kw: tr(s, lang, **kw)
         t, s = it.get("type"), it.get("slide") or {}
-        head = f"{k}. 【{self.type_name(it)}"
+        head = f"{k}. " + _("【") + self.type_name(it, lang)
         if t in ("pin", "box", "el", "text", "slide", "pen", "arrow"):
-            head += " · " + KINDS.get(it.get("kind"), it.get("kind") or "")
-        head += "】" + ("【重要】" if it.get("pri") else "") + ("【所有页同样处理】" if it.get("all") else "")
+            head += " · " + _(KINDS.get(it.get("kind"), it.get("kind") or ""))
+        head += _("】") + (_("【重要】") if it.get("pri") else "") + (_("【所有页同样处理】") if it.get("all") else "")
         if t == "pin":
-            head += f" 位置 ({it.get('x')}, {it.get('y')})"
+            head += _(" 位置 ({x}, {y})", x=it.get("x"), y=it.get("y"))
         if t in ("box", "el", "pen", "image", "ink"):
-            head += f" 区域 x={it.get('x')} y={it.get('y')} 宽={it.get('w')} 高={it.get('h')}"
+            head += _(" 区域 x={x} y={y} 宽={w} 高={h}", x=it.get("x"), y=it.get("y"), w=it.get("w"), h=it.get("h"))
         if t == "arrow":
-            head += f" 从 ({it.get('x')}, {it.get('y')}) 到 ({it.get('x2')}, {it.get('y2')})"
+            head += _(" 从 ({x}, {y}) 到 ({x2}, {y2})", x=it.get("x"), y=it.get("y"), x2=it.get("x2"), y2=it.get("y2"))
         out = [head + f"  `id:{it.get('id')}`"]
-        add = lambda label, v: out.append(f"   {label}：{v}")
+        add = lambda label, v: out.append(f"   {_(label)}{_('：')}{v}")
+        pos = lambda v: _("之前" if v == "before" else "之后")
         if t == "image":
-            add("用法", IMGMODES.get(it.get("mode") or "add"))
-        if target_line(it.get("target")):
-            add("对象", target_line(it["target"]))
-        if t == "arrow" and target_line(it.get("target2")):
-            add("指向", target_line(it["target2"]))
+            add("用法", _(IMGMODES.get(it.get("mode") or "add")))
+        if target_line(it.get("target"), lang):
+            add("对象", target_line(it["target"], lang))
+        if t == "arrow" and target_line(it.get("target2"), lang):
+            add("指向", target_line(it["target2"], lang))
         if it.get("quote"):
             add("原文", f"“{it['quote']}”")
         if t == "edit":
@@ -369,32 +511,35 @@ class Target:
         if it.get("replacement"):
             add("改成", f"“{it['replacement']}”")
         if t == "new":
-            add("新页", f"{it.get('title') or '（标题未填）'}（放在{s.get('page', '这页')}{'之前' if it.get('where') == 'before' else '之后'}，版式：{LAYOUTS.get(it.get('layout') or 'auto')}）")
+            add("新页", _("{title}（放在{page}{pos}，版式：{layout}）", title=it.get("title") or _("（标题未填）"), page=s.get("page", _("这页")),
+                        pos=pos(it.get("where")), layout=_(LAYOUTS.get(it.get("layout") or "auto"))))
         if t == "move":
-            add("移到", f"{it.get('refPage', '')}｜{it.get('refTitle', '')} {'之前' if it.get('pos') == 'before' else '之后'}" if it.get("ref") else "（未选位置）")
+            add("移到", _("{page}｜{title} {pos}", page=it.get("refPage", ""), title=it.get("refTitle", ""), pos=pos(it.get("pos"))) if it.get("ref") else _("（未选位置）"))
         if it.get("text") and not (t == "notes" and it.get("text") == it.get("original")):
             add("新讲稿" if t == "notes" else "意见", str(it["text"]).replace("\n", "\n   "))
         if it.get("tex"):
             add("TeX 位置", f"`{it['tex']['file']}:{it['tex']['line']}`")
         if it.get("images"):
-            add("笔迹截图（打开看）" if t == "ink" else "图片", "，".join(f"`{m.get('path') or m.get('name')}`" for m in it["images"]))
+            add("笔迹截图（打开看）" if t == "ink" else "图片", _("，").join(f"`{m.get('path') or m.get('name')}`" for m in it["images"]))
         if it.get("pageImage"):
             add("整页（带批注）", f"`{it['pageImage']}`")
         if it.get("status") or it.get("reply"):
-            add("处理结果", (STATUS.get(it.get("status"), "") + " " + str(it.get("reply") or "")).strip())
+            add("处理结果", (_(STATUS.get(it.get("status"), "")) + " " + str(it.get("reply") or "")).strip())
         return out
 
-    def prompt(self):
-        L = [f"请按我在审阅工具里留的标注修改：{self.path}", "",
-             f"1. 先读标注清单：{self.md}",
-             f"2. 需要坐标、目标元素或图片时查：{self.ann}（我附的截图和图片在 {self.images}/）"]
+    def prompt(self, lang=None):
+        lang = self.lang(None, lang)
+        _ = lambda s, **kw: tr(s, lang, **kw)
+        L = [_("请按我在审阅工具里留的标注修改：{path}", path=self.path), "",
+             _("1. 先读标注清单：{md}", md=self.md),
+             _("2. 需要坐标、目标元素或图片时查：{ann}（我附的截图和图片在 {images}/）", ann=self.ann, images=self.images)]
         if self.source() or self.config.get("build"):
-            L.append("3. " + (f"要改的源文件是 {self.source()}" if self.source() else "直接改上面这个文件")
-                     + (f"；改完在 {self.path.parent} 运行 `{self.config['build']}`" if self.config.get("build") else ""))
+            L.append("3. " + (_("要改的源文件是 {src}", src=self.source()) if self.source() else _("直接改上面这个文件"))
+                     + (_("；改完在 {dir} 运行 `{cmd}`", dir=self.path.parent, cmd=self.config["build"]) if self.config.get("build") else ""))
         else:
-            L.append("3. 先确认这个文件是手写的还是由别的源文件生成的，改源文件" + ("" if self.kind == "html" else "（图片和 PDF 要改生成它的源文件，然后重新导出）"))
-        L += [f"4. 规则和数据格式见：{TOOL / 'AGENTS.md'}",
-              f"5. 改完后在 annotations.json 里给每条写上 status 和 reply，然后运行：python3 {TOOL / 'review.py'} archive \"{self.path}\" --summary \"一句话说明改了什么\""]
+            L.append(_("3. 先确认这个文件是手写的还是由别的源文件生成的，改源文件") + ("" if self.kind == "html" else _("（图片和 PDF 要改生成它的源文件，然后重新导出）")))
+        L += [_("4. 规则和数据格式见：{agents}", agents=TOOL / "AGENTS.md"),
+              _("5. 改完后在 annotations.json 里给每条写上 status 和 reply，然后运行：python3 {tool} archive \"{path}\" --summary \"一句话说明改了什么\"", tool=TOOL / "review.py", path=self.path)]
         return "\n".join(L) + "\n"
 
 
@@ -402,12 +547,12 @@ def natural(name):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
 
 
-def target_line(t):
+def target_line(t, lang="zh"):
     if not t or t.get("tag") in ("slide", "page", None):
         return ""
     if t.get("asset") is not None:
-        name = t.get("asset") or t.get("src") or "图片"
-        return "图片 " + name + (f"（{t['alt'][:40]}）" if t.get("alt") else "")
+        name = t.get("asset") or t.get("src") or tr("图片|one", lang)
+        return tr("图片|one", lang) + " " + name + (tr("（", lang) + t["alt"][:40] + tr("）", lang) if t.get("alt") else "")
     if t.get("text"):
         return "“" + t["text"][:90] + ("…" if len(t["text"]) > 90 else "") + "”"
     return f"<{t.get('tag')}>"
@@ -450,7 +595,7 @@ def render_pages(path, out):
     if path.suffix.lower() == ".pdf":
         exe = shutil.which("pdftoppm")
         if not exe:
-            raise SystemExit("读 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）")
+            raise SystemExit(tr("读 PDF 需要 pdftoppm（macOS：brew install poppler；Linux：apt install poppler-utils）"))
         subprocess.run([exe, "-png", "-r", str(PDF_DPI), str(path), str(Path(out) / "m")], check=True)
         return sorted(Path(out).glob("m-*.png"), key=lambda f: natural(f.name))
     return [path]
@@ -462,22 +607,23 @@ def import_marked(t, marked):
         import numpy as np
         from PIL import Image, ImageFilter
     except ImportError:
-        raise SystemExit("导入手写批注需要 Pillow 和 numpy：pip install pillow numpy")
+        raise SystemExit(tr("导入手写批注需要 Pillow 和 numpy：pip install pillow numpy"))
     marked = Path(marked).expanduser().resolve()
     if not marked.exists():
-        raise SystemExit(f"找不到文件：{marked}")
+        raise SystemExit(tr("找不到文件：{p}", p=marked))
     if t.kind == "html":
-        raise SystemExit("HTML 不能直接对比。请把它导出的 PDF 作为 FILE：review.py import 原始.pdf 批注过的.pdf")
+        raise SystemExit(tr("HTML 不能直接对比。请把它导出的 PDF 作为 FILE：review.py import 原始.pdf 批注过的.pdf"))
     if marked == t.path:
-        raise SystemExit("需要两个文件：没批注的原件和批注过的副本")
+        raise SystemExit(tr("需要两个文件：没批注的原件和批注过的副本"))
     t.ensure()
     t.images.mkdir(parents=True, exist_ok=True)
     data = t.load() or {"tool": "Redpen", "file": str(t.path), "kind": t.kind, "build": t.build(), "general": "", "items": []}
+    lang = data["lang"] = t.lang(data)
     stamp, made, cell = time.strftime("%Y%m%d-%H%M%S"), 0, 24
     with tempfile.TemporaryDirectory() as tmp:
         a_pages, b_pages = t.page_files(), render_pages(marked, tmp)
         if len(a_pages) != len(b_pages):
-            print(f"注意：原件 {len(a_pages)} 页，批注件 {len(b_pages)} 页，只对比前 {min(len(a_pages), len(b_pages))} 页")
+            print(tr("注意：原件 {a} 页，批注件 {b} 页，只对比前 {m} 页", a=len(a_pages), b=len(b_pages), m=min(len(a_pages), len(b_pages))))
         for n, (fa, fb) in enumerate(zip(a_pages, b_pages), 1):
             A, B = Image.open(fa).convert("RGB"), Image.open(fb).convert("RGB")
             if B.size != A.size:
@@ -494,7 +640,7 @@ def import_marked(t, marked):
                 continue
             page_img = t.images / f"ink-{stamp}-p{n:02d}.png"
             B.save(page_img)
-            title = f"第 {n} 页" if t.kind == "pdf" else fa.name
+            title = tr("第 {n} 页", lang, n=n) if t.kind == "pdf" else fa.name
             regions = []
             if cells.mean() > 0.3:
                 regions.append((0, 0, W, H, True))
@@ -534,8 +680,8 @@ def import_marked(t, marked):
                     crop.save(out)
                 under = t.words_in(n, (x, y, w, h)) if t.kind == "pdf" and not whole else ""
                 it = {"id": f"ink{stamp[-6:]}{n:02d}{k:02d}", "type": "ink", "kind": "comment", "source": marked.name,
-                      "slide": {"n": n, "page": f"第 {n} 页", "title": title, "w": W, "h": H}, "x": x, "y": y, "w": w, "h": h,
-                      "text": "这一页和原件整体不同，请看整页图" if whole else "", "pageImage": str(page_img),
+                      "slide": {"n": n, "page": tr("第 {n} 页", lang, n=n), "title": title, "w": W, "h": H}, "x": x, "y": y, "w": w, "h": h,
+                      "text": tr("这一页和原件整体不同，请看整页图", lang) if whole else "", "pageImage": str(page_img),
                       "images": [{"name": out.name, "path": str(out), "url": f"/review/images/{quote(out.name)}"}],
                       "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
                 if under:
@@ -543,10 +689,10 @@ def import_marked(t, marked):
                 data["items"].append(it)
                 made += 1
     if not made:
-        print("没有发现和原件不同的地方。确认批注件是在同一份原件上写的。")
+        print(tr("没有发现和原件不同的地方。确认批注件是在同一份原件上写的。"))
         return
     t.save(data)
-    print(f"找到 {made} 处手写批注，已写入 {t.ann}\n文字清单：{t.md}\n每处的笔迹截图在 {t.images}/（需要看图才能读出内容）")
+    print(tr("找到 {n} 处手写批注，已写入 {ann}\n文字清单：{md}\n每处的笔迹截图在 {images}/（需要看图才能读出内容）", n=made, ann=t.ann, md=t.md, images=t.images))
 
 
 VIEWER = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</title>
@@ -581,7 +727,7 @@ fit();go(Math.max(0,(+location.hash.slice(1)||1)-1));
 </script></body></html>"""
 
 
-def viewer_html(t):
+def viewer_html(t, lang=None):
     esc = lambda s: str(s).replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     text = t.pdf_text()
 
@@ -596,8 +742,8 @@ def viewer_html(t):
             out.append("</div>")
         return "".join(out) + "</div>"
 
-    pages = "\n".join(f'<div class="holder"><section class="slide" data-title="{esc(p["title"])}"><img src="{esc(p["url"])}" alt="{esc(p["title"])}">{layer(i)}</section></div>' for i, p in enumerate(t.pages()))
-    return VIEWER.replace("__TITLE__", esc(t.path.name)).replace("__PAGES__", pages or "<p style='color:#fff'>这个文件夹里没有图片</p>")
+    pages = "\n".join(f'<div class="holder"><section class="slide" data-title="{esc(p["title"])}"><img src="{esc(p["url"])}" alt="{esc(p["title"])}">{layer(i)}</section></div>' for i, p in enumerate(t.pages(lang if lang in ("en", "zh") else None)))
+    return VIEWER.replace("__TITLE__", esc(t.path.name)).replace("__PAGES__", pages or "<p style='color:#fff'>" + tr("这个文件夹里没有图片", lang if lang in ("en", "zh") else None) + "</p>")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -657,7 +803,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         t, url = self.target, urlparse(self.path)
-        path = unquote(url.path)
+        path, lang = unquote(url.path), parse_qs(url.query).get("lang", [None])[0]
         if self.token and path == "/" and hmac.compare_digest(parse_qs(url.query).get("k", [""])[0], self.token):
             self.send_response(302)
             self.send_header("Set-Cookie", f"rvk={self.token}; Path=/; HttpOnly; SameSite=Strict")
@@ -665,13 +811,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             return self.end_headers()
         if not self.allowed():
-            return self.send(403, "需要从这台电脑打开，或用带口令的链接打开。", "text/plain; charset=utf-8")
+            return self.send(403, tr("需要从这台电脑打开，或用带口令的链接打开。"), "text/plain; charset=utf-8")
         if path in ("/", "/index.html"):
             return self.send(200, (TOOL / "app.html").read_bytes(), "text/html; charset=utf-8")
         if path == "/app.js":
             return self.send(200, (TOOL / "app.js").read_bytes(), "text/javascript; charset=utf-8")
         if path == "/viewer":
-            return self.send(200, viewer_html(t), "text/html; charset=utf-8")
+            return self.send(200, viewer_html(t, lang), "text/html; charset=utf-8")
         if path == "/api/info":
             return self.send(200, dict(t.info(), lan=self.lan_url if self.loopback() else None))
         if path == "/api/annotations":
@@ -679,9 +825,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/last":
             return self.send(200, t.last())
         if path == "/api/text":
-            return self.send(200, t.markdown(), "text/plain; charset=utf-8")
+            return self.send(200, t.markdown(lang=lang), "text/plain; charset=utf-8")
         if path == "/api/prompt":
-            return self.send(200, t.prompt(), "text/plain; charset=utf-8")
+            return self.send(200, t.prompt(lang), "text/plain; charset=utf-8")
         if path.startswith("/doc/"):
             return self.static(t.docroot, path[5:])
         if path.startswith("/pages/"):
@@ -744,7 +890,7 @@ def serve(t, port, open_browser, lan=False):
     if t.kind != "html":
         n = len(t.page_files())
         t.pdf_text()
-        print(f"{t.path.name}: {n} 页", flush=True)
+        print(tr("{name}: {n} 页", name=t.path.name, n=n), flush=True)
     Handler.target = t
     srv = None
     for p in range(port, port + 30):
@@ -755,14 +901,14 @@ def serve(t, port, open_browser, lan=False):
         except OSError:
             continue
     if srv is None:
-        raise SystemExit(f"端口 {port}–{port + 29} 都被占用了，用 --port 换一个")
+        raise SystemExit(tr("端口 {a}–{b} 都被占用了，用 --port 换一个", a=port, b=port + 29))
     url = f"http://127.0.0.1:{Handler.port}/"
-    print(f"Redpen: {url}\n  文件: {t.path}\n  标注: {t.ann}", flush=True)
+    print(tr("Redpen: {url}\n  文件: {path}\n  标注: {ann}", url=url, path=t.path, ann=t.ann), flush=True)
     if lan:
         Handler.token = "".join(secrets.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(8))
         Handler.lan_url = f"http://{lan_ip()}:{Handler.port}/?k={Handler.token}"
-        print(f"  iPad 或其他设备（同一个 Wi-Fi 或 Tailscale）打开: {Handler.lan_url}", flush=True)
-    print("  按 Ctrl+C 停止", flush=True)
+        print(tr("  iPad 或其他设备（同一个 Wi-Fi 或 Tailscale）打开: {url}", url=Handler.lan_url), flush=True)
+    print(tr("  按 Ctrl+C 停止"), flush=True)
     if open_browser:
         try:
             webbrowser.open(url)
@@ -771,10 +917,11 @@ def serve(t, port, open_browser, lan=False):
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\n已停止")
+        print(tr("\n已停止"))
 
 
 def main(argv=None):
+    global _lang, UI_LANG
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv.pop(0) if argv and argv[0] in ("serve", "show", "prompt", "archive", "import") else "serve"
     ap = argparse.ArgumentParser(prog="review.py", description="Mark up an HTML deck, HTML page, image or PDF; an AI agent applies the notes.")
@@ -792,20 +939,25 @@ def main(argv=None):
     ap.add_argument("--root", help="folder to serve, when the HTML loads files from a parent folder (relative to FILE's folder)")
     ap.add_argument("--page", action="store_true", help="treat an HTML file as one scrolling page, not slides")
     ap.add_argument("--summary", help="archive: one line on what was changed")
+    ap.add_argument("--lang", choices=("en", "zh"), help="language of the review page and of what is printed here "
+                    "(default: REDPEN_LANG, else the system language; the page has its own switch, which is remembered)")
     a = ap.parse_args(argv)
+    env = (os.environ.get("REDPEN_LANG") or "").lower()[:2]
+    if a.lang or env in ("en", "zh"):
+        UI_LANG = _lang = a.lang or env
     opts = {k: getattr(a, k) for k in ("source", "build", "slides", "notes", "title", "root")}
     if a.page:
         opts["mode"] = "page"
     t = Target(a.file, opts)
     if cmd == "show":
-        sys.stdout.write(t.markdown())
+        sys.stdout.write(t.markdown(lang=a.lang))
     elif cmd == "prompt":
-        sys.stdout.write(t.prompt())
+        sys.stdout.write(t.prompt(a.lang))
     elif cmd == "import":
         import_marked(t, a.marked)
     elif cmd == "archive":
         dest = t.do_archive(a.summary)
-        print(f"已归档到 {dest}" if dest else "没有需要归档的标注")
+        print(tr("已归档到 {dest}", dest=dest) if dest else tr("没有需要归档的标注"))
     else:
         serve(t, a.port, not a.no_open, a.lan)
 

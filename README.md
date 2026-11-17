@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/dependencies-none-E5372B" alt="No dependencies">
 </p>
 
-![Marking up a slide in Redpen](assets/screenshot-annotate.png)
+![Marking up a slide in Redpen](assets/screenshot-annotate-en.png)
 
 ## Why
 
@@ -48,8 +48,7 @@ python3 redpen/review.py redpen/examples/demo-deck.html
 ```
 
 Your browser opens the demo deck. It has a typo, a sentence that is far too long and a chart that is too small.
-Mark them up, click **复制给 AI 的指令** (copy the instruction for the AI) at the bottom right, and paste it to
-your agent. The [tutorial](docs/tutorial.md) walks through this in ten minutes.
+Mark them up, click **Copy for AI** at the bottom right, and paste it to your agent. The [tutorial](docs/tutorial.md) walks through this in ten minutes.
 
 To review your own file, give its path:
 
@@ -60,9 +59,9 @@ python3 redpen/review.py path/to/talk.html
 PDFs need [poppler](https://poppler.freedesktop.org) (`brew install poppler` on macOS, `apt install poppler-utils`
 on Debian and Ubuntu).
 
-> **Language.** The review page is in Chinese for now. Every tool has a one-letter shortcut, and the tutorial gives
-> each label with its English meaning. The notes you write can be in any language. A translation of the interface
-> would be a welcome contribution.
+> **Language.** The review page comes in English and Chinese. It follows your browser's language, and the button at the
+> right end of the toolbar (**中文** / **EN**) switches it; the choice is remembered. The instruction for the agent and
+> the list of notes follow the page. Your own notes can be in any language.
 
 ## How a round works
 
@@ -72,7 +71,7 @@ on Debian and Ubuntu).
 3. **The agent edits.** It reads the notes, changes the source file, rebuilds, replies to each note and archives
    the round. The open review page clears itself, shows the replies and offers to reload the new version.
 
-![The agent's replies after a round](assets/screenshot-replies.png)
+![The agent's replies after a round](assets/screenshot-replies-en.png)
 
 ## What you can review
 
@@ -95,9 +94,9 @@ on Debian and Ubuntu).
 | Attach a picture to one note | Click into that note's text box, then paste, or drop the file on the card |
 | Draw | `P` for freehand, `A` for an arrow from one place to another |
 | Change the deck itself | Sidebar buttons: add a slide before or after, move, delete, split, merge, move to backup, "do not touch this slide" |
-| Rewrite speaker notes | Sidebar: **改讲稿** |
+| Rewrite speaker notes | Sidebar: **Speaker notes** |
 | Present | `F` for full screen with only the slides, `L` for a laser pointer |
-| Everything else | ★ marks a note as important, **所有页** applies it to every page, `⌘Z` / `Ctrl+Z` undoes, `Esc` returns to browsing, `←` `→` turn pages |
+| Everything else | ★ marks a note as important, **All pages** applies it to every page, `⌘Z` / `Ctrl+Z` undoes, `Esc` returns to browsing, `←` `→` turn pages |
 
 ## iPad and Apple Pencil
 
@@ -143,6 +142,7 @@ python3 review.py FILE                      open the review page (HTML, PDF, ima
     --slides CSS  --notes CSS  --title CSS  selectors, when a deck is not detected correctly
     --page                                  treat an HTML file as one scrolling page, not slides
     --root DIR                              folder to serve, when the HTML loads files from a parent folder
+    --lang en|zh                            language the page starts in and of the messages printed here
 
 python3 review.py show FILE                 print the current notes as text
 python3 review.py prompt FILE               print the instruction to paste to an agent

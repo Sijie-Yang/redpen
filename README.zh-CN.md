@@ -48,6 +48,9 @@ python3 redpen/review.py 文件路径
 
 打开 PDF 需要 [poppler](https://poppler.freedesktop.org)（macOS：`brew install poppler`；Debian / Ubuntu：`apt install poppler-utils`）。
 
+> **语言。** 审阅页面有中文和英文两种界面，默认跟随浏览器的语言。工具栏最右边的 **EN** / **中文** 按钮可以切换，选择会被记住。
+> 复制给 AI 的指令和标注清单跟着界面的语言走。你写的意见用什么语言都可以。
+
 ## 一轮是怎么走的
 
 1. **你批注。** 标注边写边存，放在文件旁边的文件夹里（`talk.html.review/`）。
@@ -133,6 +136,7 @@ python3 review.py FILE                      打开审阅页面（HTML、PDF、�
     --slides CSS  --notes CSS  --title CSS  幻灯片识别不对时，手动给出选择器
     --page                                  把 HTML 当作一个滚动的整页，不按幻灯片处理
     --root DIR                              HTML 引用了上级文件夹里的文件时，指定要提供的根目录
+    --lang en|zh                            页面初始的语言，以及终端里提示信息的语言
 
 python3 review.py show FILE                 打印当前的标注（文字版）
 python3 review.py prompt FILE               打印要粘贴给 AI 的指令

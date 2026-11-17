@@ -30,15 +30,16 @@ If there is no `annotations.json`, there is nothing to apply: say so, do not gue
 
 ## How to apply the notes
 
-1. Read `annotations.md` completely, including "总体意见" (general comments). The labels in `annotations.md` are in
-   Chinese; the table under "Note types" and the glossary at the end of this file explain them. Open `annotations.json` when you need
-   exact data for a note (match by `id`).
+1. Read `annotations.md` completely, including the general comments ("General comments" / "总体意见"). Its labels are
+   in the language of the page the reviewer used, English or Chinese; the glossary at the end of this file gives both.
+   Open `annotations.json` when you need exact data for a note (match by `id`); it is the same in either language.
 2. Find what to edit. The header of `annotations.md` names the source file and build command if they were configured.
    If not: an HTML file may be hand-written (edit it) or generated (edit the generator or template, then rebuild).
    A PDF or image is never edited directly: edit what produces it (`.tex`, a plotting script, a slide template) and rebuild.
 3. Open every attached image before acting on its note. Images are how the reviewer shows what they want, and for
    `ink` notes the handwriting in the image is the whole content of the note.
-4. Apply each note. Notes marked 【重要】 come first. A note marked 【所有页同样处理】 applies to every page or slide.
+4. Apply each note. Notes marked `[IMPORTANT]` (【重要】) come first. A note marked `[ALL PAGES]` (【所有页同样处理】)
+   applies to every page or slide.
    When a note is unclear or two notes conflict, do the part that is clear and say what you left out; do not invent intent.
 5. Rebuild, and check the result the way the project normally does (render the pages and look at them).
 6. Record what you did, then archive the round (see "Closing the round").
@@ -99,7 +100,7 @@ Then run:
     python3 review.py archive "<file>" --summary "one line on what changed"
 
 This moves the notes to `archive/`. The review page, if open, picks that up within a few seconds, shows your replies
-under "上一轮" (previous round), and offers to reload the rebuilt file. Report to the reviewer in their language: what
+under "Previous round" ("上一轮"), and offers to reload the rebuilt file. Report to the reviewer in their language: what
 changed, what you skipped and why.
 
 ## Handwriting from an iPad (offline)
@@ -120,6 +121,10 @@ If you have only the annotated copy and no original, look at its pages directly 
     ... --lan                                                     prints a link an iPad on the same network can open
     ... --slides "<css>" / --page                                 if an HTML deck is not detected / to force one scrolling page
     ... --no-open --port N                                        when you launch it yourself as a background process
+    ... --lang en|zh                                              language the page starts in and of the printed messages
+
+The page is in English or Chinese. It follows the reviewer's browser, and they can switch it in the toolbar. `show` and
+`prompt` print in the language the notes were made in; `--lang` overrides that.
 
 Supported: HTML slide decks (any framework), other HTML pages (posters, reports), PDF (papers, exported slides),
 PNG/JPG/SVG/WebP images, a folder of images. PowerPoint and Keynote: export to PDF first.
@@ -135,20 +140,23 @@ PNG/JPG/SVG/WebP images, a folder of images. PowerPoint and Keynote: export to P
 - Do not stop or restart a running review server while the reviewer may have the page open, and test changes to the
   tool on a copy of a file, not on a file under review. If notes look missing, check `history/` before anything else.
 
-## Glossary: Chinese labels in `annotations.md`
+## Glossary: labels in `annotations.md`
 
-| Label | Meaning |
-|---|---|
-| 修改意见 | review notes (document title) |
-| 总体意见 | general comments on the whole file |
-| 【重要】 | important: do this first |
-| 【所有页同样处理】 | apply to every page or slide |
-| 对象 / 指向 | the element the note is about / the element an arrow points to |
-| 原文 / 改成 | the original text / the replacement the reviewer wrote |
-| 意见 | the reviewer's comment |
-| 位置 / 区域 | point / region, in page pixels |
-| 图片 / 笔迹截图 | attached images / crop of handwriting (open it) |
-| TeX 位置 | source file and line from SyncTeX |
-| 新页 / 移到 / 新讲稿 | new page / move to / new speaker notes |
-| 处理结果 | what the agent did (status and reply) |
-| 第 N 页 / 备用页 / 整页 | page N / backup slide / the whole page |
+| English page | Chinese page | Meaning |
+|---|---|---|
+| Review notes | 修改意见 | document title |
+| General comments | 总体意见 | comments on the whole file |
+| Summary of this round | 本轮修改说明 | the agent's summary (in archived rounds) |
+| `[IMPORTANT]` | 【重要】 | do this first |
+| `[ALL PAGES]` | 【所有页同样处理】 | apply to every page or slide |
+| Target / Points to | 对象 / 指向 | the element the note is about / the element an arrow points to |
+| Original / Change to | 原文 / 改成 | the original text / the replacement the reviewer wrote |
+| Comment | 意见 | the reviewer's comment |
+| at (x, y) / region | 位置 / 区域 | point / region, in page pixels |
+| Use | 用法 | what to do with an attached image (`mode`) |
+| Images / Handwriting crop | 图片 / 笔迹截图 | attached images / crop of handwriting (open it) |
+| Annotated page | 整页（带批注） | the whole annotated page of an `ink` note |
+| TeX | TeX 位置 | source file and line from SyncTeX |
+| New page / Move to / New speaker notes | 新页 / 移到 / 新讲稿 | new page / move to / new speaker notes |
+| Result | 处理结果 | what the agent did (status and reply) |
+| Page N / Backup N / Whole page | 第 N 页 / 备用页 N / 整页 | page N / backup slide / the whole page |

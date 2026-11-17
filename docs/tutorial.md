@@ -6,8 +6,8 @@ This walks you through one complete round on the demo deck: mark it up, hand it 
 It takes about ten minutes. After that come the things you will want for your own files: generated files, LaTeX
 papers, posters, and the iPad.
 
-The review page is in Chinese for now. This tutorial gives every label you need with its meaning, and section 2
-has the full list.
+The review page comes in English and Chinese. It follows your browser's language; the button at the right end of
+the toolbar (**中文** / **EN**) switches it. This tutorial uses the English labels.
 
 ## 1. Open the demo deck
 
@@ -32,80 +32,62 @@ slide 2, a 55-word sentence on slide 2, and a chart on slide 3 that is too small
 
 The document is on the left, exactly as it normally looks. Your notes are on the right. The tools are on top.
 
-![The review page](../assets/screenshot-annotate.png)
+![The review page](../assets/screenshot-annotate-en.png)
 
 **Toolbar**
 
-| Label | Key | Meaning |
+| Tool | Key | What it does |
 |---|---|---|
-| 浏览 | `V` | Browse. Nothing is added when you click. You can still select text to comment on it |
-| 点评 | `C` | Pin: click anywhere to leave a comment at that point |
-| 框选 | `R` | Box: drag a rectangle around a region |
-| 选句 | `T` | Sentence: click a sentence to select all of it |
-| 选元素 | `E` | Element: click a figure, a table or a paragraph to select the whole thing |
-| 改字 | `W` | Edit text in place (HTML only) |
-| 画笔 | `P` | Pen: draw freehand |
-| 箭头 | `A` | Arrow: drag from one place to another |
-| 激光笔 | `L` | Laser pointer, for presenting. Leaves no note |
-| 加图 | `I` | Add an image file to this page |
-| 贴截图 | `⌘V` / `Ctrl+V` | Paste a screenshot onto this page |
-| 演示 | `F` | Present full screen |
-| 侧栏 | | Show or hide the sidebar |
-| 帮助 | | Help |
+| Browse | `V` | Nothing is added when you click. You can still select text to comment on it |
+| Pin | `C` | Click anywhere to leave a comment at that point |
+| Box | `R` | Drag a rectangle around a region |
+| Sentence | `T` | Click a sentence to select all of it |
+| Element | `E` | Click a figure, a table or a paragraph to select the whole thing |
+| Edit | `W` | Retype text in place (HTML only) |
+| Pen | `P` | Draw freehand |
+| Arrow | `A` | Drag from one place to another |
+| Laser | `L` | Laser pointer, for presenting. Leaves no note |
+| Image | `I` | Add an image file to this page |
+| Paste | `⌘V` / `Ctrl+V` | Paste a screenshot onto this page |
+| Present | `F` | Present full screen |
+| Sidebar, Help | | Show or hide the sidebar; open the help |
+| 中文 / EN | | Switch the interface between Chinese and English. The choice is remembered |
 
 `←` and `→` turn pages. `Esc` goes back to browsing. `⌘Z` / `Ctrl+Z` undoes.
 
 **Sidebar**
 
-| Label | Meaning |
-|---|---|
-| 本页 / 全部 / 上一轮 | Notes on this page / all notes, with an outline of the deck / the previous round with the agent's replies |
-| 整页意见 | A comment on the whole slide |
-| 前面加一页 / 后面加一页 | Add a slide before / after this one |
-| 改讲稿 | Rewrite the speaker notes |
-| 移动 / 删除 | Move / delete this slide |
-| 更多… | More: do not touch this slide, split in two, merge with the next, move to backup, skip in the short version, duplicate and change |
-| 本页讲稿 | The current speaker notes. 讲稿始终展开 keeps them open |
-
-**On each note**
-
-| Label | Meaning |
-|---|---|
-| 评论 ▾ | The kind of note: 评论 comment, 改文字 change text, 加图 / 换图 add or replace an image, 版式 layout, 删掉 remove, 其他 other |
-| ★ | Important: the agent does these first |
-| 删除 | Delete the note |
-| 改成 | "Change to": type the new wording here if you already know it |
-| 意见 | Your comment |
-| the small purple buttons | One-click comments, such as 太长，缩短 (too long, shorten), 放大 (enlarge), 删掉 (remove) |
-| + 图片 | Attach a picture to this note |
-| 所有页 | Apply this note to every page |
-
-**Bottom**
-
-| Label | Meaning |
-|---|---|
-| 复制给 AI 的指令 | Copy the instruction for the agent |
-| 复制标注文字 | Copy the notes as plain text |
-| 归档并清空 | Archive this round and start clean, without an agent |
+- **This page / All / Previous round**: the notes on this page; all notes, next to an outline of the deck; the previous
+  round with the agent's replies.
+- **Page comment**: a comment on the whole slide. **Add page before / Add page after / Move / Delete**: change the
+  deck itself. **Speaker notes**: rewrite the speaker notes of this slide.
+- **More…**: do not touch this page, split it in two, merge it with the next, move it to backup, skip it in the short
+  version, duplicate it and change the copy.
+- On the card of each note: the kind of note (Comment, Change text, Add / replace image, Layout, Delete, Other), ★
+  (important: the agent does these first), **Change to** (the new wording, if you already know it), your comment, the
+  small purple buttons (one-click comments), **＋ Image** (attach a picture to this note) and **All pages** (apply
+  this note to every page).
+- At the bottom: **Copy for AI** (the instruction for your agent), **Copy notes** (the notes as plain text) and
+  **Archive** (close this round and start clean, without an agent).
 
 ## 3. Fix a typo
 
 Press `→` to go to slide 2. Press `T`, then click the sentence that begins "Cafés recieve many short visits".
 
-The sentence is highlighted and a card appears on the right. Type your comment into the large box (意见):
+The sentence is highlighted and a card appears on the right. Type your comment into the large box:
 
 > Typo: recieve → receive
 
-If you would rather give the exact new wording, type it into 改成 instead. The agent then uses it verbatim.
+If you would rather give the exact new wording, type it into **Change to** instead. The agent then uses it verbatim.
 
 There is no save button. The green line at the bottom tells you how many notes have been saved.
 
 ## 4. Shorten a sentence with one click
 
 Still on slide 2 and still in the sentence tool, click the long third bullet. On its card, click the small button
-**太长，缩短** (too long, shorten). Then click the **★** on the card to mark it as important.
+**Too long, shorten**. Then click the **★** on the card to mark it as important.
 
-![Two notes on text](../assets/screenshot-text.png)
+![Two notes on text](../assets/screenshot-text-en.png)
 
 Press `Esc` to leave the sentence tool.
 
@@ -115,8 +97,8 @@ Go to slide 3. Press `E` and click the chart. The whole chart gets a frame and a
 
 > Too small to read. Make the chart fill the left half of the slide.
 
-`E` picks the innermost element under the pointer. If it picks too little, click **选大一层** on the card to step
-up to the element around it.
+`E` picks the innermost element under the pointer. If it picks too little, click **Select parent** on the card to
+step up to the element around it.
 
 ## 6. Draw
 
@@ -134,33 +116,32 @@ Press `Esc`.
 
 **Show, don't tell.** Take a screenshot of anything (a figure from a paper, another slide you like) and press
 `⌘V` / `Ctrl+V`. The picture lands on the page. Drag it to where you want it and resize it. On its card, choose
-whether the agent should place it here (放在这个位置), use it to replace the image underneath (替换下面这张图), or
-treat it only as an example of what you want (只是参考，不放进去).
+whether the agent should place it here, use it to replace the image underneath, or treat it only as a reference
+for what you want.
 
-**Change the deck.** On slide 4, click **后面加一页** (add a slide after), give the new slide a title, pick a layout
-and say in a sentence what should be on it.
+**Change the deck.** On slide 4, click **Add page after**, give the new slide a title, pick a layout and say in a
+sentence what should be on it.
 
-**Rewrite speaker notes.** Click **改讲稿** and edit the text. The agent receives the full new text.
+**Rewrite speaker notes.** Click **Speaker notes** and edit the text. The agent receives the full new text.
 
-Then open the tab **全部** to see every note in one list, next to an outline of the deck.
+Then open the tab **All** to see every note in one list, next to an outline of the deck.
 
 ## 8. Hand it to your agent
 
-Click **复制给 AI 的指令** at the bottom right and paste into your agent. It does not matter which project or
+Click **Copy for AI** at the bottom right and paste into your agent. It does not matter which project or
 conversation the agent is in: the instruction contains the full paths of the file, the notes and the rules.
 
-The pasted text is in Chinese. In English it says:
+The pasted text looks like this:
 
-> Please apply the notes I left in the review tool to: /…/demo-deck.html
+> Please apply the notes I left in the review tool (Redpen) to: /…/demo-deck.html
 >
 > 1. Read the list of notes first: /…/demo-deck.html.review/annotations.md
 > 2. For coordinates, target elements or images, look in: /…/annotations.json
-> 3. Find out whether this file is hand-written or generated from a source; edit the source
+> 3. First find out whether this file is hand-written or generated from another source file; edit the source
 > 4. Rules and data format: /…/redpen/AGENTS.md
-> 5. When done, write a status and a reply on each note, then run: `review.py archive …`
+> 5. When you are done, write a status and a reply on each note in annotations.json, then run: `review.py archive …`
 
-Agents that read Chinese instructions (all current ones do) need nothing else. You can also simply say "apply my
-review notes on demo-deck.html following redpen/AGENTS.md".
+You can also simply say "apply my review notes on demo-deck.html following redpen/AGENTS.md".
 
 The agent now:
 
@@ -173,10 +154,10 @@ The agent now:
 ## 9. Read the replies
 
 Keep the review page open while the agent works. A few seconds after it archives the round, the page empties
-itself, offers to reload the changed file, and the tab **上一轮** (previous round) shows each of your notes with
-the agent's reply: 已改 (done), 部分已改 (partly done) or 没有改 (not done), and why.
+itself, offers to reload the changed file, and the tab **Previous round** shows each of your notes with the agent's
+reply: Done, Partly done or Not done, and why.
 
-![Replies after the round](../assets/screenshot-replies.png)
+![Replies after the round](../assets/screenshot-replies-en.png)
 
 If something is still not right, mark it up again and hand over again. Each round is kept in
 `demo-deck.html.review/archive/`.
@@ -266,7 +247,8 @@ so it cannot be found), and for an HTML deck annotate its PDF export.
 | No `.tex` line numbers | Compile with `-synctex=1` and keep the `.synctex.gz` file next to the PDF |
 | The port is taken | Redpen tries the next 30 ports by itself, or choose one with `--port` |
 | Notes seem to be gone | Nothing is ever deleted. Look in `<file>.review/history/` and `archive/` |
-| You want to start over without an agent | **归档并清空** at the bottom right |
+| You want to start over without an agent | **Archive** at the bottom right |
+| The page is in the wrong language | Click **EN** or **中文** at the right end of the toolbar, or start with `--lang en` |
 | The iPad cannot open the link | Check that both devices are on the same network and that you used the full link with `?k=…` |
 
 ## 13. Good habits

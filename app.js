@@ -9,18 +9,37 @@ const $ = s => document.querySelector(s);
 const frame = $('#rv-frame'), top = $('#rv-top'), side = $('#rv-side'), body = $('#rv-body'), tabs = $('.rv-tabs'), fileIn = $('#rv-file'), help = $('#rv-help');
 const statusEl = $('#rv-status');
 const setStatus = (t, c) => { statusEl.textContent = t; statusEl.className = c || ''; };
+/* Interface language. Chinese is the source text; english() at the end of this file holds the translations.
+   The choice is kept in a cookie, which every review page on this computer shares, whatever its port. */
+const MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+let LANG = null;
+try { LANG = (document.cookie.match(/(?:^|;\s*)rvlang=(en|zh)\b/) || [])[1] || localStorage.getItem('rv-lang'); } catch (_) {}
+const LANG_SET = LANG === 'en' || LANG === 'zh';
+if (!LANG_SET) LANG = [...(navigator.languages || []), navigator.language || ''].some(l => /^zh\b/i.test(l)) ? 'zh' : 'en';
+let EN = LANG === 'en' ? english() : {};
+function L(s, v) {   /* L('已保存 {n} 条', { n: 3 }); a "|context" suffix tells two uses of the same Chinese word apart */
+  let o = LANG === 'en' && EN[s] != null ? EN[s] : s.replace(/\|\w+$/, '');
+  if (v) o = o.replace(/\{(\w+)\}/g, (m, k) => (k === 's' && v.s == null ? (v.n === 1 ? '' : 's') : v[k] != null ? v[k] : m));
+  return MAC ? o : o.replace(/⇧⌘Z/g, 'Ctrl+Shift+Z').replace(/⌘(?=[A-Z])/g, 'Ctrl+');
+}
+const pairs = a => a.map(([k, v]) => [k, L(v)]);
+const dict = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, L(v)]));
+const lists = o => Object.fromEntries(Object.entries(o).map(([k, a]) => [k, a.map(x => L(x))]));
+const shortLab = t => (LANG === 'en' ? t.replace(/^Page /, '').replace(/^Backup /, 'B') : t.replace('第 ', '').replace(' 页', ''));
 let INFO;
-try { INFO = await (await fetch('api/info', { cache: 'no-store' })).json(); } catch (_) { setStatus('连不上本地服务', 'err'); return; }
-document.title = '标注 · ' + INFO.name;
+try { INFO = await (await fetch('api/info', { cache: 'no-store' })).json(); } catch (_) { setStatus(L('连不上本地服务'), 'err'); return; }
+if (!LANG_SET && (INFO.lang === 'en' || INFO.lang === 'zh') && INFO.lang !== LANG) { LANG = INFO.lang; EN = LANG === 'en' ? english() : {}; }
+document.documentElement.lang = LANG;
+document.title = L('标注|brand') + ' · ' + INFO.name;
 const HTML = INFO.kind === 'html', TEXT = !!INFO.textLayer;
 
-const KINDS = [['comment', '评论'], ['text', '改文字'], ['image', '加图 / 换图'], ['layout', '版式'], ['remove', '删掉'], ['other', '其他']];
-const TYPES = { pin: '点评', box: '框选', el: '选中元素', text: '选中文字', edit: '直接改字', image: '加图', pen: '手绘', arrow: '箭头', slide: '整页意见', 'new': '新增一页', del: '删除此页', move: '移动此页', notes: '修改讲稿', op: '整页操作', ink: '手写批注' };
+const KINDS = pairs([['comment', '评论'], ['text', '改文字'], ['image', '加图 / 换图'], ['layout', '版式'], ['remove', '删掉'], ['other', '其他']]);
+const TYPES = dict({ pin: '点评', box: '框选', el: '选中元素', text: '选中文字', edit: '直接改字', image: '加图', pen: '手绘', arrow: '箭头', slide: '整页意见', 'new': '新增一页', del: '删除此页', move: '移动此页', notes: '修改讲稿', op: '整页操作', ink: '手写批注' });
 const KIND0 = { edit: 'text', image: 'image', arrow: 'layout' };
-const OPS = { keep: '这页不要动', split: '拆成两页', merge: '和下一页合并', backup: '移到备用页', optional: '短版本里跳过', dup: '复制这一页再改' };
-const LAYOUTS = [['auto', '由 AI 决定'], ['fig', '标题 + 一张大图'], ['figtext', '左图右文'], ['bullets', '标题 + 要点'], ['table', '表格'], ['compare', '左右对比'], ['full', '整页一张图'], ['copy', '照本页的版式']];
-const IMGMODES = [['add', '放在这个位置'], ['replace', '替换下面这张图'], ['ref', '只是参考，不放进去']];
-const IMGLAB = { add: '放这里', replace: '替换', ref: '参考' };
+const OPS = dict({ keep: '这页不要动', split: '拆成两页', merge: '和下一页合并', backup: '移到备用页', optional: '短版本里跳过', dup: '复制这一页再改' });
+const LAYOUTS = pairs([['auto', '由 AI 决定'], ['fig', '标题 + 一张大图'], ['figtext', '左图右文'], ['bullets', '标题 + 要点'], ['table', '表格'], ['compare', '左右对比'], ['full', '整页一张图'], ['copy', '照本页的版式']]);
+const IMGMODES = pairs([['add', '放在这个位置'], ['replace', '替换下面这张图'], ['ref', '只是参考，不放进去']]);
+const IMGLAB = dict({ add: '放这里', replace: '替换', ref: '参考' });
 const TOOLS = [
   ['browse', '浏览', 'V', '选中文字可以评论；截图直接 ⌘V 粘贴，图片可以拖进来；用手写笔可以直接画'],
   ['pin', '点评', 'C', '点任意位置，留下一条意见'],
@@ -30,17 +49,17 @@ const TOOLS = [
   ['edit', '改字', 'W', '点一段文字直接修改，回车完成，Esc 放弃；改动会记录成一条标注'],
   ['pen', '画笔', 'P', '随手画，连续几笔算一条；Esc 退出'],
   ['arrow', '箭头', 'A', '从一处拖到另一处，表示“移到这里”或“这两处有关”'],
-  ['laser', '激光笔', 'L', '红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。不会记成标注，翻页照常用方向键；Esc 退出']];
-const OFF = { sent: !TEXT && '这种文件里没有可以选的文字，请用点评、框选或画笔', el: !HTML && !TEXT && '图片里没有元素可选，请用框选', edit: !HTML && '只有 HTML 能直接改字。PDF 和图片请选中文字后写“改成…”' };
+  ['laser', '激光笔', 'L', '红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。不会记成标注，翻页照常用方向键；Esc 退出']].map(t => [t[0], L(t[1]), t[2], L(t[3])]);
+const OFF = { sent: !TEXT && L('这种文件里没有可以选的文字，请用点评、框选或画笔'), el: !HTML && !TEXT && L('图片里没有元素可选，请用框选'), edit: !HTML && L('只有 HTML 能直接改字。PDF 和图片请选中文字后写“改成…”') };
 const MODAL = ['sent', 'el', 'edit'], DRAW = ['pin', 'box', 'pen', 'arrow'], SCOPED = ['pin', 'box', 'el', 'text', 'slide', 'pen'];
-const CHIPS = {
+const CHIPS = lists({
   text: ['删掉这句', '太长，缩短', '换个说法', '看不懂，说清楚', '加粗强调'],
   img: ['放大', '缩小', '换一张图', '裁掉留白', '删掉', '加图注'],
   gen: ['放大', '缩小', '删掉', '字太小', '太挤', '对齐'],
   slide: ['内容太多', '太空', '字太小', '换个版式', '加一张图', '这页很好'],
   arrow: ['移到箭头指的位置', '两处对调', '这两处要对应起来'],
   image: ['放大一点', '缩小一点', '只要图的一部分', '配一句图注'],
-  'new': ['从论文里找图', '用表格', '只放一句话和一张图'] };
+  'new': ['从论文里找图', '用表格', '只放一句话和一张图'] });
 
 /* ---------- styles and elements that live inside the reviewed document ---------- */
 const IN_CSS = `
@@ -93,7 +112,7 @@ rv-pop button:hover{background:#6B3FD4}
 `;
 
 /* ---------- state ---------- */
-const blank = () => ({ tool: 'Redpen', file: INFO.path, kind: INFO.kind, build: INFO.build, updated: null, general: '', items: [] });
+const blank = () => ({ tool: 'Redpen', lang: LANG, file: INFO.path, kind: INFO.kind, build: INFO.build, updated: null, general: '', items: [] });
 let S = blank(), LAST = null, rev = '0', tool = 'browse', selId = null, tab = 'slide', saveT = null, dirty = false, drag = null;
 let penId = null, editing = null, editCancel = false, pre = null, noClick = 0, newBuild = false;
 let fd = null, fw = null, A = null, layer, svg, marks, hov, pop, G = null, curEl = null, adaptUntil = 0;
@@ -119,49 +138,54 @@ const nOf = el => A.slides().indexOf(el) + 1;
 const byId = id => S.items.find(i => i.id === id);
 const itemsOf = n => S.items.filter(i => i.slide && i.slide.n === n);
 const stale = () => S.items.length > 0 && S.build && INFO.build && S.build !== INFO.build;
-const typeName = it => it.type === 'op' ? (OPS[it.op] || '整页操作') : it.type === 'new' ? (it.where === 'before' ? '前面加一页' : '后面加一页') : (TYPES[it.type] || it.type);
-const opLabel = it => typeName(it) + (it.type === 'new' && it.title ? '：' + it.title : '') + (it.type === 'move' && it.ref ? ' → ' + (it.refPage || '') + (it.pos === 'before' ? '之前' : '之后') : '');
+const typeName = it => it.type === 'op' ? (OPS[it.op] || L('整页操作')) : it.type === 'new' ? (it.where === 'before' ? L('前面加一页') : L('后面加一页')) : (TYPES[it.type] || it.type);
+const opLabel = it => typeName(it) + (it.type === 'new' && it.title ? L('：') + it.title : '') + (it.type === 'move' && it.ref ? ' → ' + L(it.pos === 'before' ? '{page}之前' : '{page}之后', { page: it.refPage || '' }) : '');
 const imgUrl = m => m.url ? '/' + String(m.url).replace(/^\//, '') : (m.dataUrl || '');
 const U = () => (G ? G.W / G.width : 1) / zk;   /* document pixels per screen pixel */
 
 /* ---------- chrome ---------- */
-top.innerHTML = '<b>标注</b><span class="rv-grp">' + TOOLS.map(t => '<button data-tool="' + t[0] + '" title="' + esc(OFF[t[0]] || t[3]) + '"' + (OFF[t[0]] ? ' disabled' : '') + '>' + t[1] + '<small>' + t[2] + '</small></button>').join('') + '</span>'
-  + '<span class="rv-grp"><button data-do="img" title="选一张图片放到这一页">加图<small>I</small></button><button data-do="paste" title="把剪贴板里的截图放到这一页，也可以直接按 ⌘V">贴截图<small>⌘V</small></button></span>'
-  + '<span class="rv-grp"><button data-do="undo" title="撤销 ⌘Z">↶</button><button data-do="redo" title="重做 ⇧⌘Z">↷</button></span>'
-  + '<span class="rv-grp" id="rv-zoom"><button data-do="zout" title="缩小">−</button><button data-do="zfit" title="整页宽度适应窗口">适应</button><button data-do="zin" title="放大">＋</button></span>'
+top.innerHTML = '<b>' + L('标注|brand') + '</b><span class="rv-grp">' + TOOLS.map(t => '<button data-tool="' + t[0] + '" title="' + esc(OFF[t[0]] || t[3]) + '"' + (OFF[t[0]] ? ' disabled' : '') + '>' + t[1] + '<small>' + t[2] + '</small></button>').join('') + '</span>'
+  + '<span class="rv-grp"><button data-do="img" title="' + L('选一张图片放到这一页') + '">' + L('加图') + '<small>I</small></button><button data-do="paste" title="' + L('把剪贴板里的截图放到这一页，也可以直接按 ⌘V') + '">' + L('贴截图') + '<small>' + L('⌘V') + '</small></button></span>'
+  + '<span class="rv-grp"><button data-do="undo" title="' + L('撤销 ⌘Z') + '">↶</button><button data-do="redo" title="' + L('重做 ⇧⌘Z') + '">↷</button></span>'
+  + '<span class="rv-grp" id="rv-zoom"><button data-do="zout" title="' + L('缩小|zoom') + '">−</button><button data-do="zfit" title="' + L('整页宽度适应窗口') + '">' + L('适应') + '</button><button data-do="zin" title="' + L('放大|zoom') + '">＋</button></span>'
   + '<span class="rv-grp"><button data-nav="-1">‹</button><span id="rv-page"></span><button data-nav="1">›</button></span>'
-  + '<button data-do="present" title="全屏演示：隐藏工具栏、侧栏和标注，只留幻灯片和激光笔">演示<small>F</small></button><button data-do="side" title="收起或展开右侧栏">侧栏</button><button data-do="help">帮助</button><span id="rv-hint"></span>';
-help.innerHTML = '<div><h3>怎么标注</h3><table>'
-  + '<tr><td>评论一句话</td><td>按 <kbd>T</kbd> 后点那句话；或者直接选中文字，在弹出的小条里点“评论 / 改写 / 缩短 / 删掉”</td></tr>'
-  + '<tr><td>直接改字</td><td>按 <kbd>W</kbd> 后点一段文字，就地修改，回车完成（只对 HTML）</td></tr>'
-  + '<tr><td>评论图或一块内容</td><td><kbd>E</kbd> 点它选中整个元素；<kbd>C</kbd> 在任意位置放一个点；<kbd>R</kbd> 拖一个框</td></tr>'
-  + '<tr><td>加外部截图</td><td>截图后按 <kbd>⌘V</kbd>，图会出现在这一页上，拖动调整位置和大小。也可以把图片文件拖进来，或点“加图”。拖到已有的图上表示替换它</td></tr>'
-  + '<tr><td>给某条意见配图</td><td>先点进那条意见的输入框再粘贴，或把图片拖到那张卡片上</td></tr>'
-  + '<tr><td>画和箭头</td><td><kbd>P</kbd> 随手画，<kbd>A</kbd> 从一处拖到另一处。用 Apple Pencil 时不用选工具，直接画</td></tr>'
-  + '<tr><td>全屏演示</td><td>点“演示”或按 <kbd>F</kbd>：全屏，只留幻灯片和激光笔，工具栏、侧栏和标注都隐藏。<kbd>←</kbd> <kbd>→</kbd> 或空格翻页，<kbd>V</kbd> 换回普通鼠标，<kbd>Esc</kbd> 或 <kbd>F</kbd> 退出</td></tr>'
-  + '<tr><td>激光笔</td><td>按 <kbd>L</kbd>，红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。只用来指给别人看，不会记成标注。讲的时候可以点“侧栏”把右边收起来</td></tr>'
-  + '<tr><td>加页、删页、挪页</td><td>右侧“前面加一页 / 后面加一页 / 移动 / 删除”，“更多”里有拆页、合并、移到备用页、这页不要动</td></tr>'
-  + '<tr><td>持续查看讲稿</td><td>勾选右侧“讲稿始终展开”，翻页和刷新后都会保持展开。取消勾选可恢复按页手动展开。</td></tr>'
-  + '<tr><td>其他</td><td>★ 标为重要；“所有页”表示每一页都照这条改；<kbd>⌘Z</kbd> 撤销；<kbd>Esc</kbd> 回到浏览；<kbd>←</kbd> <kbd>→</kbd> 翻页</td></tr>'
-  + '<tr><td>交给 AI</td><td>点右下角“复制给 AI 的指令”，粘贴给 Claude 或 Codex。它改完后，这里的“上一轮”会显示每条的处理结果</td></tr>'
-  + '<tr><td>在 iPad 上用</td><td>' + (INFO.lan ? '在 iPad 的 Safari 里打开：<code>' + esc(INFO.lan) + '</code>' : '启动时加 <code>--lan</code>，终端会给出 iPad 用的链接（同一个 Wi-Fi 或 Tailscale）') + '。<br>离线：在 iPad 上用任何 App 手写批注 PDF，把批注件传回来，让 AI 运行 <code>review.py import 原件 批注件</code></td></tr>'
-  + '</table><p style="margin:12px 0 0;color:#6B7688;font-size:13px">标注保存在 <code>' + esc(INFO.review) + '</code>。点空白处关闭。</p></div>';
+  + '<button data-do="present" title="' + L('全屏演示：隐藏工具栏、侧栏和标注，只留幻灯片和激光笔') + '">' + L('演示') + '<small>F</small></button><button data-do="side" title="' + L('收起或展开右侧栏') + '">' + L('侧栏') + '</button><button data-do="help">' + L('帮助') + '</button>'
+  + '<button data-do="lang" title="' + (LANG === 'en' ? '切换到中文界面' : 'Switch the interface to English') + '">' + (LANG === 'en' ? '中文' : 'EN') + '</button><span id="rv-hint"></span>';
+[['prompt', '复制给 AI 的指令', '复制一条指令，粘贴给 AI 就会按标注改'], ['copy', '复制标注文字', '把标注复制成纯文字'], ['clear', '归档并清空', '不经过 AI，直接结束这一轮；标注保存在 archive/ 里']]
+  .forEach(([k, t, tip]) => { const b = document.querySelector('#rv-foot [data-do=' + k + ']'); if (b) { b.textContent = L(t); b.title = L(tip); } });
+help.innerHTML = '<div><h3>' + L('怎么标注') + '</h3><table>' + [
+  ['评论一句话', '按 <kbd>T</kbd> 后点那句话；或者直接选中文字，在弹出的小条里点“评论 / 改写 / 缩短 / 删掉”'],
+  ['直接改字', '按 <kbd>W</kbd> 后点一段文字，就地修改，回车完成（只对 HTML）'],
+  ['评论图或一块内容', '<kbd>E</kbd> 点它选中整个元素；<kbd>C</kbd> 在任意位置放一个点；<kbd>R</kbd> 拖一个框'],
+  ['加外部截图', '截图后按 <kbd>⌘V</kbd>，图会出现在这一页上，拖动调整位置和大小。也可以把图片文件拖进来，或点“加图”。拖到已有的图上表示替换它'],
+  ['给某条意见配图', '先点进那条意见的输入框再粘贴，或把图片拖到那张卡片上'],
+  ['画和箭头', '<kbd>P</kbd> 随手画，<kbd>A</kbd> 从一处拖到另一处。用 Apple Pencil 时不用选工具，直接画'],
+  ['全屏演示', '点“演示”或按 <kbd>F</kbd>：全屏，只留幻灯片和激光笔，工具栏、侧栏和标注都隐藏。<kbd>←</kbd> <kbd>→</kbd> 或空格翻页，<kbd>V</kbd> 换回普通鼠标，<kbd>Esc</kbd> 或 <kbd>F</kbd> 退出'],
+  ['激光笔', '按 <kbd>L</kbd>，红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。只用来指给别人看，不会记成标注。讲的时候可以点“侧栏”把右边收起来'],
+  ['加页、删页、挪页', '右侧“前面加一页 / 后面加一页 / 移动 / 删除”，“更多”里有拆页、合并、移到备用页、这页不要动'],
+  ['持续查看讲稿', '勾选右侧“讲稿始终展开”，翻页和刷新后都会保持展开。取消勾选可恢复按页手动展开。'],
+  ['其他', '★ 标为重要；“所有页”表示每一页都照这条改；<kbd>⌘Z</kbd> 撤销；<kbd>Esc</kbd> 回到浏览；<kbd>←</kbd> <kbd>→</kbd> 翻页'],
+  ['交给 AI', '点右下角“复制给 AI 的指令”，粘贴给 Claude 或 Codex。它改完后，这里的“上一轮”会显示每条的处理结果'],
+  ['换语言', '点工具栏最右边的 EN 换成英文界面，再点“中文”换回来。复制给 AI 的指令和标注清单会跟着换']
+].map(r => '<tr><td>' + L(r[0]) + '</td><td>' + L(r[1]) + '</td></tr>').join('')
+  + '<tr><td>' + L('在 iPad 上用') + '</td><td>' + (INFO.lan ? L('在 iPad 的 Safari 里打开：') + '<code>' + esc(INFO.lan) + '</code>' : L('启动时加 <code>--lan</code>，终端会给出 iPad 用的链接（同一个 Wi-Fi 或 Tailscale）')) + L('。<br>离线：在 iPad 上用任何 App 手写批注 PDF，把批注件传回来，让 AI 运行 <code>review.py import 原件 批注件</code>') + '</td></tr>'
+  + '</table><p style="margin:12px 0 0;color:#6B7688;font-size:13px">' + L('标注保存在 <code>{dir}</code>。点空白处关闭。', { dir: esc(INFO.review) }) + '</p></div>';
 
 /* ---------- persistence and undo ---------- */
-const READY = () => '自动保存在 ' + INFO.review.split('/').slice(-1)[0] + '/。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。';
+const READY = () => L('自动保存在 {dir}/。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。', { dir: INFO.review.split('/').slice(-1)[0] });
 async function loadNotes() {
   try {
     const r = await fetch('api/annotations', { cache: 'no-store' }), j = await r.json();
     S = j && Array.isArray(j.items) ? Object.assign(blank(), j) : blank();
     const l = await (await fetch('api/last', { cache: 'no-store' })).json(); LAST = l && Array.isArray(l.items) && l.items.length ? l : null;
     rev = (await (await fetch('api/info', { cache: 'no-store' })).json()).rev;
-  } catch (_) { setStatus('读取标注失败：本地服务没有响应', 'err'); return; }
+  } catch (_) { setStatus(L('读取标注失败：本地服务没有响应'), 'err'); return; }
   hist.length = 0; fut.length = 0; selId = null; penId = null; dirty = false;
   if (tab === 'last' && !LAST) tab = 'slide';
   setStatus(READY(), 'ok');
   try {   /* notes a previous visit could not save */
     const d = JSON.parse(localStorage.getItem(DRAFT) || 'null');
-    if (d && d.S && Array.isArray(d.S.items)) { const n = mergeIn(d.S); if (n) { save(); setStatus('找回了上次没存上的 ' + n + ' 条标注', 'ok'); } else localStorage.removeItem(DRAFT); }
+    if (d && d.S && Array.isArray(d.S.items)) { const n = mergeIn(d.S); if (n) { save(); setStatus(L('找回了上次没存上的 {n} 条标注', { n }), 'ok'); } else localStorage.removeItem(DRAFT); }
   } catch (_) {}
   if (fd) { syncEdits(); render(); }
 }
@@ -174,9 +198,9 @@ function mergeIn(other) {   /* add notes this page does not have (saved by anoth
   if (!S.general && other.general) S.general = other.general;
   return n;
 }
-function save() { dirty = true; mirror(); setStatus('保存中…'); clearTimeout(saveT); saveT = setTimeout(flush, 350); }
+function save() { dirty = true; mirror(); setStatus(L('保存中…')); clearTimeout(saveT); saveT = setTimeout(flush, 350); }
 async function flush() {
-  clearTimeout(saveT); S.updated = new Date().toISOString();
+  clearTimeout(saveT); S.updated = new Date().toISOString(); S.lang = LANG;
   if (!S.items.length) S.build = INFO.build;
   try {
     const post = () => fetch('api/annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, S, { _base: rev }), null, 1) });
@@ -187,9 +211,9 @@ async function flush() {
     }
     if (!r.ok) throw new Error(r.status);
     rev = (await r.json()).rev; dirty = false; try { localStorage.removeItem(DRAFT); } catch (_) {}
-    setStatus('已保存 ' + S.items.length + ' 条。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。', 'ok');
+    setStatus(L('已保存 {n} 条。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。', { n: S.items.length }), 'ok');
   } catch (_) {
-    setStatus('没存上：本地服务没有响应。标注还在这个页面里，浏览器里也留了备份；服务恢复后会自动补存，先不要关这个页面。', 'err');
+    setStatus(L('没存上：本地服务没有响应。标注还在这个页面里，浏览器里也留了备份；服务恢复后会自动补存，先不要关这个页面。'), 'err');
     clearTimeout(saveT); saveT = setTimeout(flush, 3000);
   }
 }
@@ -197,7 +221,7 @@ addEventListener('beforeunload', e => { if (dirty) { mirror(); e.preventDefault(
 function updUndo() { top.querySelector('[data-do=undo]').disabled = !hist.length; top.querySelector('[data-do=redo]').disabled = !fut.length; }
 function snap() { hist.push(JSON.stringify(S)); if (hist.length > 80) hist.shift(); fut.length = 0; pre = null; updUndo(); }
 function restore(j) { S = Object.assign(blank(), JSON.parse(j)); if (!byId(selId)) selId = null; penId = null; syncEdits(); save(); render(); }
-function undo() { if (!hist.length) { setStatus('没有可以撤销的操作'); return; } fut.push(JSON.stringify(S)); restore(hist.pop()); }
+function undo() { if (!hist.length) { setStatus(L('没有可以撤销的操作')); return; } fut.push(JSON.stringify(S)); restore(hist.pop()); }
 function redo() { if (!fut.length) return; hist.push(JSON.stringify(S)); restore(fut.pop()); }
 setInterval(async () => {   /* the file was rebuilt, or an agent archived the notes */
   if (document.hidden) return;
@@ -218,7 +242,7 @@ function makeAdapter() {
     page: false,
     title: el => el.dataset.title || norm((el.querySelector(cfg.title || 'h1,h2,h3,.title') || {}).textContent).slice(0, 120) || el.getAttribute('aria-label') || '',
     notes: el => el.querySelector(cfg.notes || 'aside.notes,.notes,.speaker-notes'),
-    label(el) { const all = this.slides(), main = all.filter(s => !s.hasAttribute('data-backup')), k = main.indexOf(el); return k >= 0 ? '第 ' + (k + 1) + ' 页' : '备用页 ' + (all.filter(s => s.hasAttribute('data-backup')).indexOf(el) + 1); },
+    label(el) { const all = this.slides(), main = all.filter(s => !s.hasAttribute('data-backup')), k = main.indexOf(el); return k >= 0 ? L('第 {n} 页', { n: k + 1 }) : L('备用页 {n}', { n: all.filter(s => s.hasAttribute('data-backup')).indexOf(el) + 1 }); },
     count() { return this.slides().filter(s => !s.hasAttribute('data-backup')).length; } };
   if (cfg.mode !== 'page') {
     if (!cfg.slides && w.__deck && w.__deck.all && w.__deck.all.length)
@@ -240,7 +264,7 @@ function makeAdapter() {
     }
   }
   const de = fd.documentElement;
-  return Object.assign(base, { kind: 'page', page: true, slides: () => [de], current: () => de, go() {}, step: d => w.scrollBy({ top: d * w.innerHeight * 0.85 }), title: () => fd.title || INFO.name, label: () => '整页', count: () => 1, notes: () => null });
+  return Object.assign(base, { kind: 'page', page: true, slides: () => [de], current: () => de, go() {}, step: d => w.scrollBy({ top: d * w.innerHeight * 0.85 }), title: () => fd.title || INFO.name, label: () => L('整页'), count: () => 1, notes: () => null });
 }
 
 /* ---------- geometry and targets ---------- */
@@ -285,7 +309,7 @@ function describe(el, root) {
   if (img) { t.asset = img.dataset.asset || ''; t.alt = img.alt || ''; const src = img.getAttribute('src') || ''; if (src && !/^data:/.test(src)) t.src = src.slice(0, 300); }
   return t;
 }
-const targetLine = t => !t || t.tag === 'slide' || t.tag === 'page' ? '' : (t.asset != null ? '图片' + (t.asset || t.src ? '：' + (t.asset || t.src.split('/').pop()) : '') + (t.alt ? '（' + t.alt.slice(0, 40) + '）' : '') : (t.text ? '“' + t.text.slice(0, 70) + (t.text.length > 70 ? '…' : '') + '”' : '<' + t.tag + '>'));
+const targetLine = t => !t || t.tag === 'slide' || t.tag === 'page' ? '' : (t.asset != null ? L('图片') + (t.asset || t.src ? L('：') + (t.asset || t.src.split('/').pop()) : '') + (t.alt ? L('（') + t.alt.slice(0, 40) + L('）') : '') : (t.text ? '“' + t.text.slice(0, 70) + (t.text.length > 70 ? '…' : '') + '”' : '<' + t.tag + '>'));
 function blockOf(el, root) {   /* the thing a click refers to: an image, a marked text block, or the nearest non-inline box */
   if (!el || !root || !root.contains(el) || el === root) return null;
   const m = el.closest('[data-rv-block]'); if (m && root.contains(m) && m !== root) return m;
@@ -367,7 +391,7 @@ function single(type, extra, match) {
   if (ex) { selId = ex.id; tab = 'slide'; render(); focusCard(ex.id); return ex; }
   return add(type, extra);
 }
-function remove(id) { const it = byId(id); if (!it) return; snap(); gone.add(id); S.items = S.items.filter(i => i.id !== id); if (selId === id) selId = null; if (penId === id) penId = null; if (it.type === 'edit') syncEdits(); save(); render(); setStatus('已删除这条，⌘Z 可以撤销'); }
+function remove(id) { const it = byId(id); if (!it) return; snap(); gone.add(id); S.items = S.items.filter(i => i.id !== id); if (selId === id) selId = null; if (penId === id) penId = null; if (it.type === 'edit') syncEdits(); save(); render(); setStatus(L('已删除这条，⌘Z 可以撤销')); }
 function markSel() { if (layer) layer.querySelectorAll('[data-id]').forEach(m => m.classList.toggle('sel', m.dataset.id === selId)); body.querySelectorAll('.rv-card').forEach(c => c.classList.toggle('sel', c.dataset.id === selId)); }
 function select(id) {
   selId = id; if (tab !== 'slide') { tab = 'slide'; renderSide(); }
@@ -420,7 +444,7 @@ function present(on) {
     prevTool = tool; setTool('laser');
     const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
     if (rq) { try { const p = rq.call(el); if (p && p.catch) p.catch(() => {}); } catch (_) {} }
-    toast('演示模式 · ← → 或空格翻页 · L 激光笔 · V 普通鼠标 · Esc 或 F 退出');
+    toast(L('演示模式 · ← → 或空格翻页 · L 激光笔 · V 普通鼠标 · Esc 或 F 退出'));
   } else {
     const ex = document.exitFullscreen || document.webkitExitFullscreen;
     if (fsEl() && ex) { try { const p = ex.call(document); if (p && p.catch) p.catch(() => {}); } catch (_) {} }
@@ -477,7 +501,7 @@ function endEdit() {
   const f = { original: o, replacement: now, newHtml: clean(el.innerHTML) };
   if (it) { if (it.replacement !== now) { snap(); Object.assign(it, f); selId = it.id; save(); } render(); }
   else { const tg = describe(el, sl); tg.text = o.slice(0, 260); add('edit', Object.assign(f, { target: tg }), { focus: false }); }
-  setStatus('已记下这处改字。可以在右侧补一句原因', 'ok');
+  setStatus(L('已记下这处改字。可以在右侧补一句原因'), 'ok');
 }
 
 /* ---------- drawing ---------- */
@@ -568,9 +592,9 @@ function onClick(e) {   /* capture phase, inside the document */
   if (!MODAL.includes(tool)) return;
   const root = act(); if (!root || !root.contains(t)) return;
   e.preventDefault(); e.stopPropagation(); hov.innerHTML = '';
-  if (tool === 'sent') { const s = sentenceAt(e.clientX, e.clientY); if (s) addText(s.range, s.text, 'comment', s.blk, s.span); else setStatus('这里没有文字。评论图片或空白处请用“选元素”或“点评”'); }
-  else if (tool === 'el') { const el = blockOf(t, root); if (el) add('el', Object.assign({ target: describe(el, root) }, boundsOf(el))); else setStatus('这里选不到单独的元素，请用“框选”'); }
-  else { const h = textBlockAt(e.clientX, e.clientY); if (h) startEdit(h.blk, e.clientX, e.clientY); else setStatus('这里没有可以改的文字'); }
+  if (tool === 'sent') { const s = sentenceAt(e.clientX, e.clientY); if (s) addText(s.range, s.text, 'comment', s.blk, s.span); else setStatus(L('这里没有文字。评论图片或空白处请用“选元素”或“点评”')); }
+  else if (tool === 'el') { const el = blockOf(t, root); if (el) add('el', Object.assign({ target: describe(el, root) }, boundsOf(el))); else setStatus(L('这里选不到单独的元素，请用“框选”')); }
+  else { const h = textBlockAt(e.clientX, e.clientY); if (h) startEdit(h.blk, e.clientX, e.clientY); else setStatus(L('这里没有可以改的文字')); }
 }
 function shield(e) {   /* keep the document's own handlers quiet while a tool is working on its content */
   if (layer.contains(e.target)) { e.stopPropagation(); return; }
@@ -585,7 +609,7 @@ function addText(rg, text, op, host, span) {
   if (!span) { const a = offsetIn(host, rg.startContainer, rg.startOffset), b = offsetIn(host, rg.endContainer, rg.endOffset); if (a >= 0 && b > a) span = [a, b]; }
   const ex = { quote: norm(text || rg.toString()).slice(0, 1200), replacement: '', rects: rectsOf(rg), target: describe(host, root) };
   if (span) ex.span = span;
-  if (op === 'delete') { ex.kind = 'remove'; ex.text = '删掉这句'; } else if (op === 'short') { ex.kind = 'text'; ex.text = '太长，缩短'; } else if (op === 'rewrite') ex.kind = 'text';
+  if (op === 'delete') { ex.kind = 'remove'; ex.text = L('删掉这句'); } else if (op === 'short') { ex.kind = 'text'; ex.text = L('太长，缩短'); } else if (op === 'rewrite') ex.kind = 'text';
   add('text', ex, { focus: op === 'rewrite' ? '[data-f=replacement]' : undefined });
 }
 function checkSel() {
@@ -593,7 +617,7 @@ function checkSel() {
   if (tool !== 'browse' || editing || drag || !s || s.isCollapsed || !root || !root.contains(s.anchorNode) || layer.contains(s.anchorNode) || !s.toString().trim()) { pop.style.display = 'none'; return; }
   const r = s.getRangeAt(0).getBoundingClientRect();
   pop.style.display = 'flex';
-  pop.style.left = Math.max(8, Math.min(fw.innerWidth - 250, r.left)) + 'px';
+  pop.style.left = Math.max(8, Math.min(fw.innerWidth - Math.max(250, pop.offsetWidth + 8), r.left)) + 'px';
   pop.style.top = Math.min(fw.innerHeight - 48, r.bottom + 8) + 'px';
 }
 let selT = null;
@@ -607,16 +631,16 @@ function renderMarks() {
     const path = d => { sv('path', { d, class: 'rv-hit', 'data-id': it.id }); sv('path', { d, class: 'rv-stroke' + sel, 'data-id': it.id }); };
     if (it.type === 'pin') mk('rv-dot rv-mv', { x: p.x, y: p.y }, num);
     else if (it.type === 'box') mk('rv-rect rv-mv', p, tag + '<span class="rv-rs"></span>');
-    else if (it.type === 'ink') mk('rv-ink', it, '<i>' + num + ' 手写</i>');
+    else if (it.type === 'ink') mk('rv-ink', it, '<i>' + num + ' ' + L('手写') + '</i>');
     else if (it.type === 'el') mk('rv-elr', p, tag);
     else if (it.type === 'text') {
       let rs = it.rects || [];
       if (it.span && it.target && it.target.path) { const el = findByPath(sl, it.target.path), rg = el && rangeIn(el, it.span[0], it.span[1]); if (rg && norm(rg.toString()) === it.quote) { const live = rectsOf(rg); if (live.length) rs = live; } }
       rs.forEach((r, j) => mk('rv-hl', r, j ? '' : tag));
     }
-    else if (it.type === 'edit') { const el = findByPath(sl, it.target && it.target.path); if (el) mk('rv-edr', boundsOf(el), '<i>' + num + ' 已改字</i>'); }
+    else if (it.type === 'edit') { const el = findByPath(sl, it.target && it.target.path); if (el) mk('rv-edr', boundsOf(el), '<i>' + num + ' ' + L('已改字') + '</i>'); }
     else if (it.type === 'image') {
-      const m0 = (it.images || [])[0], inner = !m0 ? '<b>图片</b>' : /\.pdf$/i.test(m0.name) ? '<b>PDF</b>' : '<img src="' + esc(imgUrl(m0)) + '" alt="" draggable="false">';
+      const m0 = (it.images || [])[0], inner = !m0 ? '<b>' + L('图片') + '</b>' : /\.pdf$/i.test(m0.name) ? '<b>PDF</b>' : '<img src="' + esc(imgUrl(m0)) + '" alt="" draggable="false">';
       mk('rv-img rv-mv', p, inner + '<i>' + num + ' ' + IMGLAB[it.mode || 'add'] + '</i><span class="rv-rs"></span>');
     }
     else if (it.type === 'pen') { (it.strokes || []).forEach(s => path(penD(s))); mk('rv-tagn', { x: it.x, y: it.y }, num); }
@@ -638,66 +662,66 @@ function card(it, k) {
   const hasKind = ['pin', 'box', 'el', 'text', 'slide', 'pen', 'arrow'].includes(it.type);
   let h = '<div class="rv-card' + (it.id === selId ? ' sel' : '') + '" data-id="' + it.id + '"><div class="rv-h"><span class="rv-num">' + (k + 1) + '</span><span class="rv-type">' + esc(typeName(it)) + '</span>'
     + (hasKind ? '<select data-f="kind">' + opts(KINDS, it.kind) + '</select>' : '')
-    + '<button class="rv-star' + (it.pri ? ' on' : '') + '" data-pri title="标为重要">★</button><button class="rv-x" data-del title="删除这条">删除</button></div>';
-  if (it.type === 'text') h += '<div class="rv-q">' + esc(it.quote) + '</div><label class="rv-l">改成（可留空，只写意见）</label><input type="text" data-f="replacement" value="' + esc(it.replacement) + '">';
-  else if (it.type === 'edit') h += '<label class="rv-l">原文</label><div class="rv-q">' + esc(it.original) + '</div><label class="rv-l">改成</label><input type="text" data-f="replacement" value="' + esc(it.replacement) + '">';
-  else if (it.type === 'arrow') h += '<div class="rv-t">从 ' + esc(targetLine(it.target) || '空白处') + ' → 到 ' + esc(targetLine(it.target2) || '空白处') + '</div>';
+    + '<button class="rv-star' + (it.pri ? ' on' : '') + '" data-pri title="' + L('标为重要') + '">★</button><button class="rv-x" data-del title="' + L('删除这条') + '">' + L('删除') + '</button></div>';
+  if (it.type === 'text') h += '<div class="rv-q">' + esc(it.quote) + '</div><label class="rv-l">' + L('改成（可留空，只写意见）') + '</label><input type="text" data-f="replacement" value="' + esc(it.replacement) + '">';
+  else if (it.type === 'edit') h += '<label class="rv-l">' + L('原文') + '</label><div class="rv-q">' + esc(it.original) + '</div><label class="rv-l">' + L('改成') + '</label><input type="text" data-f="replacement" value="' + esc(it.replacement) + '">';
+  else if (it.type === 'arrow') h += '<div class="rv-t">' + L('从 {a} → 到 {b}', { a: esc(targetLine(it.target) || L('空白处')), b: esc(targetLine(it.target2) || L('空白处')) }) + '</div>';
   else if (it.target && targetLine(it.target)) h += '<div class="rv-t" title="' + esc(targetLine(it.target)) + '">' + esc(targetLine(it.target)) + '</div>';
-  if (it.tex) h += '<div class="rv-t" title="SyncTeX">TeX：' + esc(it.tex.file.split('/').pop() + ':' + it.tex.line) + '</div>';
+  if (it.tex) h += '<div class="rv-t" title="SyncTeX">TeX' + L('：') + esc(it.tex.file.split('/').pop() + ':' + it.tex.line) + '</div>';
   if (it.type === 'image') h += '<div class="rv-row"><select data-f="mode">' + opts(IMGMODES, it.mode || 'add') + '</select></div>';
-  if (it.type === 'new') h += '<div class="rv-row"><select data-f="where">' + opts([['before', '加在这页前面'], ['after', '加在这页后面']], it.where || 'after') + '</select><select data-f="layout">' + opts(LAYOUTS, it.layout || 'auto') + '</select></div>'
-    + '<label class="rv-l">新页标题</label><input type="text" data-f="title" value="' + esc(it.title) + '" placeholder="这一页的结论句">';
-  if (it.type === 'move') h += '<div class="rv-row">移到<select data-f="ref"><option value="">选一页…</option>' + opts(A.slides().map((s, i) => [i + 1, A.label(s) + '｜' + A.title(s)]), it.ref || '') + '</select><select data-f="pos" style="flex:none">' + opts([['before', '之前'], ['after', '之后']], it.pos || 'after') + '</select></div>';
+  if (it.type === 'new') h += '<div class="rv-row"><select data-f="where">' + opts(pairs([['before', '加在这页前面'], ['after', '加在这页后面']]), it.where || 'after') + '</select><select data-f="layout">' + opts(LAYOUTS, it.layout || 'auto') + '</select></div>'
+    + '<label class="rv-l">' + L('新页标题') + '</label><input type="text" data-f="title" value="' + esc(it.title) + '" placeholder="' + L('这一页的结论句') + '">';
+  if (it.type === 'move') h += '<div class="rv-row">' + L('移到') + '<select data-f="ref"' + (LANG === 'en' ? ' style="order:1"' : '') + '><option value="">' + L('选一页…') + '</option>' + opts(A.slides().map((s, i) => [i + 1, A.label(s) + L('｜') + A.title(s)]), it.ref || '') + '</select><select data-f="pos" style="flex:none">' + opts(pairs([['before', '之前'], ['after', '之后']]), it.pos || 'after') + '</select></div>';
   const ch = chipsFor(it); if (ch.length) h += '<div class="rv-chips">' + ch.map(c => '<button data-chip="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>';
   const ph = { 'new': '这一页讲什么、放什么内容和图（图片可以直接粘贴在这里）', del: '原因（可不填）', move: '说明（可不填）', notes: '', slide: '对整页的意见', op: '说明（可不填）', edit: '为什么这么改（可不填）', image: '这张图怎么用：放多大、配什么文字（可不填）', arrow: '说明（可不填）', text: '意见（可不填）', ink: '手写内容在图里。想补充或打字说明可以写在这里', pen: '画的是什么意思（可不填，AI 会看笔迹的位置）' }[it.type];
-  h += '<textarea data-f="text" rows="' + (it.type === 'notes' ? 9 : it.type === 'new' ? 4 : 3) + '" placeholder="' + (ph == null ? '写下意见…' : ph) + '">' + esc(it.text) + '</textarea>';
+  h += '<textarea data-f="text" rows="' + (it.type === 'notes' ? 9 : it.type === 'new' ? 4 : 3) + '" placeholder="' + (ph == null ? L('写下意见…') : ph && L(ph)) + '">' + esc(it.text) + '</textarea>';
   h += '<div class="rv-imgs">' + (it.images || []).map((m, j) => '<span class="rv-thumb' + (it.type === 'ink' ? ' big' : '') + '" title="' + esc(m.name) + '">' + (/\.pdf$/i.test(m.name) ? 'PDF' : '<img src="' + esc(imgUrl(m)) + '" alt="">') + (it.type === 'ink' ? '' : '<button data-rmimg="' + j + '">×</button>') + '</span>').join('')
-    + '<label class="rv-add">＋ 图片<input type="file" accept="image/*,.pdf" multiple></label>'
-    + (SCOPED.includes(it.type) && !A.page ? '<button class="rv-tog' + (it.all ? ' on' : '') + '" data-all title="每一页都照这条处理">所有页</button>' : '')
-    + (it.type === 'el' ? '<button class="rv-tog" data-up title="改为选中外面一层">选大一层</button>' : '') + '</div></div>';
+    + '<label class="rv-add">' + L('＋ 图片') + '<input type="file" accept="image/*,.pdf" multiple></label>'
+    + (SCOPED.includes(it.type) && !A.page ? '<button class="rv-tog' + (it.all ? ' on' : '') + '" data-all title="' + L('每一页都照这条处理') + '">' + L('所有页') + '</button>' : '')
+    + (it.type === 'el' ? '<button class="rv-tog" data-up title="' + L('改为选中外面一层') + '">' + L('选大一层') + '</button>' : '') + '</div></div>';
   return h;
 }
 function renderSide() {
   const sl = act(); if (!sl) return;
   const info = sinfo(sl), list = itemsOf(info.n), multi = !A.page;
-  tabs.innerHTML = '<button data-tab="slide" class="' + (tab === 'slide' ? 'on' : '') + '">' + (multi ? '本页' : '标注') + ' (' + list.length + ')</button>'
-    + (multi ? '<button data-tab="all" class="' + (tab === 'all' ? 'on' : '') + '">全部 (' + S.items.length + ')</button>' : '<button data-tab="all" class="' + (tab === 'all' ? 'on' : '') + '">总体意见</button>')
-    + (LAST ? '<button data-tab="last" class="' + (tab === 'last' ? 'on' : '') + '">上一轮</button>' : '');
-  let h = (newBuild ? '<div class="rv-banner">文件已经更新。<a data-reload>点这里刷新</a>看新版本。</div>' : '')
-    + (stale() ? '<div class="rv-banner">这些标注是针对旧版文件写的，位置可能已经对不上。处理完后请点“归档并清空”。</div>' : '');
+  tabs.innerHTML = '<button data-tab="slide" class="' + (tab === 'slide' ? 'on' : '') + '">' + (multi ? L('本页') : L('标注')) + ' (' + list.length + ')</button>'
+    + (multi ? '<button data-tab="all" class="' + (tab === 'all' ? 'on' : '') + '">' + L('全部') + ' (' + S.items.length + ')</button>' : '<button data-tab="all" class="' + (tab === 'all' ? 'on' : '') + '">' + L('总体意见|tab') + '</button>')
+    + (LAST ? '<button data-tab="last" class="' + (tab === 'last' ? 'on' : '') + '">' + L('上一轮') + '</button>' : '');
+  let h = (newBuild ? '<div class="rv-banner">' + L('文件已经更新。<a data-reload>点这里刷新</a>看新版本。') + '</div>' : '')
+    + (stale() ? '<div class="rv-banner">' + L('这些标注是针对旧版文件写的，位置可能已经对不上。处理完后请点“归档并清空”。') + '</div>' : '');
   if (tab === 'slide') {
     const nt = A.notes(sl), ntx = nt ? nt.textContent.trim() : '';
-    h += '<div class="rv-slidehead"><b>' + esc(info.page) + '</b>' + esc(info.title) + '</div><div class="rv-acts"><button data-act="slide">整页意见</button>'
-      + (multi ? '<button data-act="before">前面加一页</button><button data-act="after">后面加一页</button>' + (HTML ? '<button data-act="notes">改讲稿</button>' : '') + '<button data-act="move">移动</button><button data-act="del">删除</button><select data-more><option value="">更多…</option>' + opts(Object.entries(OPS), '') + '</select>' : '') + '</div>'
-      + (ntx ? '<label class="rv-notes-setting" title="翻页和刷新后保持展开；取消后可手动展开本页讲稿"><input type="checkbox" data-notes-pin' + (notesPinned ? ' checked' : '') + '>讲稿始终展开</label><details class="rv-notes' + (notesPinned ? ' pinned' : '') + '"' + (notesOpen || notesPinned ? ' open' : '') + '><summary>本页讲稿 · ' + ntx.split(/\s+/).length + ' 词' + (sl.dataset.time ? ' · 计划 ' + esc(sl.dataset.time) + ' 秒' : '') + '</summary><div>' + esc(ntx) + '</div></details>' : '')
-      + (list.length ? list.map(card).join('') : '<div class="rv-empty">这里还没有标注。<br>' + (TEXT ? '· <b>选句 T</b>：点一句话就能评论；也可以直接选中文字<br>' : '') + (HTML ? '· <b>改字 W</b>：点一段文字直接改<br>' : '') + '· <b>点评 C</b> / <b>框选 R</b>' + (HTML || TEXT ? ' / <b>选元素 E</b>' : '') + '：评论一个位置或一块区域<br>· <b>截图</b>：截图后按 ⌘V，或把图片拖进来<br>· <b>画笔 P</b> / <b>箭头 A</b>：随手画、指位置' + (multi ? '<br>· 上面的按钮：在前面或后面加页、移动、删除' : '') + '</div>');
+    h += '<div class="rv-slidehead"><b>' + esc(info.page) + '</b>' + esc(info.title) + '</div><div class="rv-acts"><button data-act="slide">' + L('整页意见') + '</button>'
+      + (multi ? '<button data-act="before">' + L('前面加一页') + '</button><button data-act="after">' + L('后面加一页') + '</button>' + (HTML ? '<button data-act="notes">' + L('改讲稿') + '</button>' : '') + '<button data-act="move">' + L('移动') + '</button><button data-act="del">' + L('删除') + '</button><select data-more><option value="">' + L('更多…') + '</option>' + opts(Object.entries(OPS), '') + '</select>' : '') + '</div>'
+      + (ntx ? '<label class="rv-notes-setting" title="' + L('翻页和刷新后保持展开；取消后可手动展开本页讲稿') + '"><input type="checkbox" data-notes-pin' + (notesPinned ? ' checked' : '') + '>' + L('讲稿始终展开') + '</label><details class="rv-notes' + (notesPinned ? ' pinned' : '') + '"' + (notesOpen || notesPinned ? ' open' : '') + '><summary>' + L('本页讲稿 · {n} 词', { n: ntx.split(/\s+/).length }) + (sl.dataset.time ? L(' · 计划 {t} 秒', { t: esc(sl.dataset.time) }) : '') + '</summary><div>' + esc(ntx) + '</div></details>' : '')
+      + (list.length ? list.map(card).join('') : '<div class="rv-empty">' + L('这里还没有标注。') + '<br>' + (TEXT ? L('· <b>选句 T</b>：点一句话就能评论；也可以直接选中文字') + '<br>' : '') + (HTML ? L('· <b>改字 W</b>：点一段文字直接改') + '<br>' : '') + '· <b>' + L('点评') + ' C</b> / <b>' + L('框选') + ' R</b>' + (HTML || TEXT ? ' / <b>' + L('选元素') + ' E</b>' : '') + L('：评论一个位置或一块区域') + '<br>' + L('· <b>截图</b>：截图后按 ⌘V，或把图片拖进来') + '<br>' + L('· <b>画笔 P</b> / <b>箭头 A</b>：随手画、指位置') + (multi ? '<br>' + L('· 上面的按钮：在前面或后面加页、移动、删除') : '') + '</div>');
   } else if (tab === 'all') {
-    h += '<label class="rv-l">总体意见</label><textarea id="rv-general" rows="4" placeholder="对整个文件的意见">' + esc(S.general) + '</textarea>';
+    h += '<label class="rv-l">' + L('总体意见') + '</label><textarea id="rv-general" rows="4" placeholder="' + L('对整个文件的意见') + '">' + esc(S.general) + '</textarea>';
     if (multi) {
       h += '<ul class="rv-out">';
-      const ghost = x => '<li class="ghost"><span class="n">＋</span><span class="ti">新增：' + esc(x.title || '（未命名）') + '</span></li>';
+      const ghost = x => '<li class="ghost"><span class="n">＋</span><span class="ti">' + L('新增：') + esc(x.title || L('（未命名）')) + '</span></li>';
       A.slides().forEach((s, i) => {
-        const l = itemsOf(i + 1), gone = l.some(x => x.type === 'del'), flags = (gone ? '<span class="rv-flag">删</span>' : '') + (l.some(x => x.type === 'move') ? '<span class="rv-flag">移</span>' : '') + (l.some(x => x.pri) ? '<span class="rv-flag">★</span>' : '');
+        const l = itemsOf(i + 1), gone = l.some(x => x.type === 'del'), flags = (gone ? '<span class="rv-flag">' + L('删') + '</span>' : '') + (l.some(x => x.type === 'move') ? '<span class="rv-flag">' + L('移') + '</span>' : '') + (l.some(x => x.pri) ? '<span class="rv-flag">★</span>' : '');
         l.filter(x => x.type === 'new' && x.where === 'before').forEach(x => { h += ghost(x); });
-        h += '<li data-goto="' + i + '" class="' + (s === sl ? 'cur ' : '') + (gone ? 'gone' : '') + '"><span class="n">' + esc(A.label(s).replace('第 ', '').replace(' 页', '')) + '</span><span class="ti">' + esc(A.title(s)) + '</span>' + flags + (l.length ? '<span class="c">' + l.length + '</span>' : '') + '</li>';
+        h += '<li data-goto="' + i + '" class="' + (s === sl ? 'cur ' : '') + (gone ? 'gone' : '') + '"><span class="n">' + esc(shortLab(A.label(s))) + '</span><span class="ti">' + esc(A.title(s)) + '</span>' + flags + (l.length ? '<span class="c">' + l.length + '</span>' : '') + '</li>';
         l.filter(x => x.type === 'new' && x.where !== 'before').forEach(x => { h += ghost(x); });
       });
       h += '</ul>';
     }
   } else if (LAST) {
-    h += '<div class="rv-empty" style="padding:0 2px 10px">上一轮的 ' + LAST.items.length + ' 条标注和处理结果。</div>' + (LAST.summary ? '<div class="rv-last"><div class="w">修改说明</div>' + esc(LAST.summary) + '</div>' : '');
+    h += '<div class="rv-empty" style="padding:0 2px 10px">' + L('上一轮的 {n} 条标注和处理结果。', { n: LAST.items.length }) + '</div>' + (LAST.summary ? '<div class="rv-last"><div class="w">' + L('修改说明') + '</div>' + esc(LAST.summary) + '</div>' : '');
     LAST.items.forEach(it => {
-      const lab = { done: '已改', partial: '部分已改', skipped: '没有改' }[it.status] || '', s = it.slide || {};
-      h += '<div class="rv-last"><div class="w">' + esc((s.page || '') + (s.title ? '｜' + s.title : '')) + ' · ' + esc(typeName(it)) + '</div>'
-        + esc(it.quote ? '“' + it.quote.slice(0, 120) + '” ' : it.original ? '“' + it.original.slice(0, 80) + '” → “' + (it.replacement || '').slice(0, 80) + '” ' : '') + esc(it.title ? it.title + '：' : '') + esc(it.text || '')
-        + '<div class="rv-reply' + (it.status === 'skipped' ? ' no' : it.reply || lab ? '' : ' none') + '">' + esc((lab ? lab + (it.reply ? '：' : '') : '') + (it.reply || (lab ? '' : '没有记录处理结果'))) + '</div></div>';
+      const lab = dict({ done: '已改', partial: '部分已改', skipped: '没有改' })[it.status] || '', s = it.slide || {};
+      h += '<div class="rv-last"><div class="w">' + esc((s.page || '') + (s.title ? L('｜') + s.title : '')) + ' · ' + esc(typeName(it)) + '</div>'
+        + esc(it.quote ? '“' + it.quote.slice(0, 120) + '” ' : it.original ? '“' + it.original.slice(0, 80) + '” → “' + (it.replacement || '').slice(0, 80) + '” ' : '') + esc(it.title ? it.title + L('：') : '') + esc(it.text || '')
+        + '<div class="rv-reply' + (it.status === 'skipped' ? ' no' : it.reply || lab ? '' : ' none') + '">' + esc((lab ? lab + (it.reply ? L('：') : '') : '') + (it.reply || (lab ? '' : L('没有记录处理结果')))) + '</div></div>';
     });
   }
   body.innerHTML = h;
 }
 function render() {
   const sl = act(); if (!sl) return;
-  $('#rv-page').textContent = A.page ? '整页' : A.label(sl) + ' · 共 ' + A.count() + ' 页';
+  $('#rv-page').textContent = A.page ? L('整页') : L('{label} · 共 {n} 页', { label: A.label(sl), n: A.count() });
   renderSide(); renderMarks(); updUndo();
 }
 const itemOf = el => { const c = el.closest('.rv-card'); return c ? byId(c.dataset.id) : null; };
@@ -726,11 +750,11 @@ body.addEventListener('click', e => {
   if (e.target.closest('[data-all]')) { if (it) { snap(); it.all = !it.all; e.target.closest('[data-all]').classList.toggle('on', it.all); save(); } return; }
   if (e.target.closest('[data-up]')) {
     const el = it && findByPath(sl, it.target && it.target.path), p = el && el.parentElement;
-    if (p && p !== sl && sl.contains(p) && p !== fd.body) { snap(); it.target = describe(p, sl); Object.assign(it, boundsOf(p)); save(); render(); } else setStatus('已经是最外面一层了');
+    if (p && p !== sl && sl.contains(p) && p !== fd.body) { snap(); it.target = describe(p, sl); Object.assign(it, boundsOf(p)); save(); render(); } else setStatus(L('已经是最外面一层了'));
     return;
   }
   const chip = e.target.closest('[data-chip]');
-  if (chip && it) { const ta = chip.closest('.rv-card').querySelector('[data-f=text]'), c = chip.dataset.chip; if (!(it.text || '').includes(c)) { snap(); it.text = (it.text ? it.text.replace(/[；;\s]+$/, '') + '；' : '') + c; ta.value = it.text; save(); } ta.focus(); return; }
+  if (chip && it) { const ta = chip.closest('.rv-card').querySelector('[data-f=text]'), c = chip.dataset.chip; if (!(it.text || '').includes(c)) { snap(); it.text = (it.text ? it.text.replace(/[；;\s]+$/, '') + L('；') : '') + c; ta.value = it.text; save(); } ta.focus(); return; }
   const rm = e.target.closest('[data-rmimg]'); if (rm) { if (it) { snap(); it.images.splice(+rm.dataset.rmimg, 1); save(); render(); } return; }
   const g = e.target.closest('[data-goto]'); if (g) { tab = 'slide'; A.go(A.slides()[+g.dataset.goto]); setTimeout(onSlide, 120); return; }
   const c = e.target.closest('.rv-card'); if (c && c.dataset.id !== selId && !e.target.closest('input,textarea,select,label,button')) select(c.dataset.id);
@@ -774,7 +798,7 @@ async function attach(it, files, nosnap) {
       const r = await fetch('api/upload?name=' + encodeURIComponent(name), { method: 'POST', body: f });
       if (!r.ok) throw new Error(r.status);
       const j = await r.json(); it.images.push({ name, path: j.path, url: j.url });
-    } catch (_) { setStatus('图片上传失败（支持 png、jpg、gif、webp、pdf）', 'err'); }
+    } catch (_) { setStatus(L('图片上传失败（支持 png、jpg、gif、webp、pdf）'), 'err'); }
   }
   save(); render();
 }
@@ -789,14 +813,14 @@ async function addImage(files, cx, cy) {   /* put an image on the current page, 
   if (HTML && tg.asset != null) { const el = findByPath(sl, tg.path); if (el) { b = boundsOf(el); mode = 'replace'; } }
   const it = add('image', Object.assign({ mode, target: tg }, b), { focus: false });
   await attach(it, files, true);
-  setStatus(mode === 'replace' ? '已标记：用这张图替换原图。右侧可以改成“放在这个位置”' : '图已放到这一页，拖动调整位置，拖右下角调整大小', 'ok');
+  setStatus(L(mode === 'replace' ? '已标记：用这张图替换原图。右侧可以改成“放在这个位置”' : '图已放到这一页，拖动调整位置，拖右下角调整大小'), 'ok');
 }
 async function pasteClip() {
   try {
     const fs = [];
     for (const ci of await navigator.clipboard.read()) { const t = ci.types.find(x => x.startsWith('image/')); if (t) fs.push(new File([await ci.getType(t)], 'screenshot.' + t.split('/')[1].replace('jpeg', 'jpg'), { type: t })); }
-    if (fs.length) addImage(fs); else setStatus('剪贴板里没有图片。先截图到剪贴板（⌃⇧⌘4），再按 ⌘V', 'err');
-  } catch (_) { setStatus('浏览器不让直接读剪贴板，请直接按 ⌘V 粘贴'); }
+    if (fs.length) addImage(fs); else setStatus(L('剪贴板里没有图片。先截图到剪贴板（⌃⇧⌘4），再按 ⌘V'), 'err');
+  } catch (_) { setStatus(L('浏览器不让直接读剪贴板，请直接按 ⌘V 粘贴')); }
 }
 function onPaste(e) {
   if (e.defaultPrevented) return;
@@ -816,16 +840,16 @@ addEventListener('drop', e => { if (!hasFiles(e) || e.defaultPrevented) return; 
 /* ---------- toolbar, export, keys ---------- */
 async function copyFrom(url, msg) {
   await flush(); let t = '';
-  try { t = await (await fetch(url, { cache: 'no-store' })).text(); } catch (_) { setStatus('本地服务没有响应', 'err'); return; }
+  try { t = await (await fetch(url, { cache: 'no-store' })).text(); } catch (_) { setStatus(L('本地服务没有响应'), 'err'); return; }
   try { await navigator.clipboard.writeText(t); }
   catch (_) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
   setStatus(msg, 'ok');
 }
 async function clearAll() {
   if (!S.items.length && !S.general) return;
-  if (!confirm('把当前 ' + S.items.length + ' 条标注归档并清空？（归档后还能在 archive/ 里找到）')) return;
+  if (!confirm(L('把当前 {n} 条标注归档并清空？（归档后还能在 archive/ 里找到）', { n: S.items.length }))) return;
   try { await flush(); await fetch('api/archive', { method: 'POST' }); } catch (_) {}
-  await loadNotes(); setStatus('已归档并清空', 'ok');
+  await loadNotes(); setStatus(L('已归档并清空'), 'ok');
 }
 top.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || !A) return; const d = b.dataset.do;
@@ -842,13 +866,13 @@ top.addEventListener('click', e => {
   else if (d === 'zfit') { if (!HTML && fw.__deck && fw.__deck.zoom) fw.__deck.zoom(0); else fitWidth(); setTimeout(tick, 50); }
   else if (d === 'present') present();
   else if (d === 'side') document.body.classList.toggle('noside');
-  else if (d === 'help') help.style.display = 'flex';
+  else if (d === 'help') help.style.display = 'flex'; else if (d === 'lang') switchLang();
 });
 help.addEventListener('click', e => { if (e.target === help) help.style.display = 'none'; });
 $('#rv-foot').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.do === 'prompt') copyFrom('api/prompt', '指令已复制。粘贴给 Claude 或 Codex 就会按标注改');
-  else if (b.dataset.do === 'copy') copyFrom('api/text', '标注文字已复制');
+  if (b.dataset.do === 'prompt') copyFrom('api/prompt?lang=' + LANG, L('指令已复制。粘贴给 Claude 或 Codex 就会按标注改'));
+  else if (b.dataset.do === 'copy') copyFrom('api/text?lang=' + LANG, L('标注文字已复制'));
   else if (b.dataset.do === 'clear') clearAll();
 });
 function onKey(e) {
@@ -909,7 +933,7 @@ function tick() {
 }
 function attachFrame() {
   try { fd = frame.contentDocument; fw = frame.contentWindow; } catch (_) { fd = null; }
-  if (!fd || !fd.body) { setStatus('打不开这个文件', 'err'); return; }
+  if (!fd || !fd.body) { setStatus(L('打不开这个文件'), 'err'); return; }
   origHtml.clear(); editing = null; drag = null; G = null; curEl = null;
   const st = fd.createElement('style'); st.textContent = IN_CSS; (fd.head || fd.documentElement).appendChild(st);
   layer = fd.createElement('rv-layer'); svg = fd.createElementNS(NS, 'svg'); marks = fd.createElement('rv-marks'); hov = fd.createElement('rv-hov');
@@ -917,7 +941,7 @@ function attachFrame() {
   layer.append(svg, marks, hov, lz);
   fd.documentElement.classList.toggle('rv-present', document.body.classList.contains('present'));
   fd.documentElement.addEventListener('mouseleave', () => { if (ldot) ldot.style.display = 'none'; });
-  pop = fd.createElement('rv-pop'); pop.innerHTML = '<button data-sel="comment">评论</button><button data-sel="rewrite">改写</button><button data-sel="short">缩短</button><button data-sel="delete">删掉</button>';
+  pop = fd.createElement('rv-pop'); pop.innerHTML = '<button data-sel="comment">' + L('评论') + '</button><button data-sel="rewrite">' + L('改写') + '</button><button data-sel="short">' + L('缩短') + '</button><button data-sel="delete">' + L('删掉') + '</button>';
   fd.body.append(layer, pop);
   A = makeAdapter(); adaptUntil = Date.now() + 3000;
   fd.addEventListener('pointerdown', onDown, true); fd.addEventListener('pointermove', onMove, true);
@@ -949,6 +973,153 @@ function attachFrame() {
 setInterval(tick, 200);
 frame.addEventListener('load', attachFrame);
 await loadNotes();
-frame.src = INFO.frame + (location.hash || '');
+frame.src = INFO.frame + (INFO.frame === '/viewer' ? '?lang=' + LANG : '') + (location.hash || '');
 window.__review = { state: () => S, info: () => INFO, adapter: () => A, undo, redo, probe: { sentenceAt, textBlockAt, blockOf, caretAt, geom: () => G } };
+
+/* ---------- language ---------- */
+async function switchLang() {   /* the page is rebuilt in the other language; notes are saved first */
+  const to = LANG === 'en' ? 'zh' : 'en';
+  try { document.cookie = 'rvlang=' + to + '; path=/; max-age=31536000; SameSite=Lax'; localStorage.setItem('rv-lang', to); } catch (_) {}
+  if (dirty) await flush();
+  location.reload();
+}
+function english() {
+  return {
+    '标注|brand': 'Redpen', '标注': 'Notes', '连不上本地服务': 'Cannot reach the local server',
+    /* categories, note types, page operations, layouts */
+    '评论': 'Comment', '改文字': 'Change text', '加图 / 换图': 'Add / replace image', '版式': 'Layout', '删掉': 'Delete', '其他': 'Other',
+    '点评': 'Pin', '框选': 'Box', '选中元素': 'Element', '选中文字': 'Selected text', '直接改字': 'Edited text', '加图': 'Image', '手绘': 'Drawing', '箭头': 'Arrow',
+    '整页意见': 'Page comment', '新增一页': 'New page', '删除此页': 'Delete this page', '移动此页': 'Move this page', '修改讲稿': 'Speaker notes', '整页操作': 'Page operation', '手写批注': 'Handwriting',
+    '这页不要动': 'Do not touch this page', '拆成两页': 'Split into two pages', '和下一页合并': 'Merge with the next page', '移到备用页': 'Move to backup', '短版本里跳过': 'Skip in the short version', '复制这一页再改': 'Duplicate this page and change the copy',
+    '由 AI 决定': 'Let the AI decide', '标题 + 一张大图': 'Title + one large figure', '左图右文': 'Figure left, text right', '标题 + 要点': 'Title + bullets', '表格': 'Table', '左右对比': 'Side-by-side comparison', '整页一张图': 'One full-page image', '照本页的版式': 'Same layout as this page',
+    '放在这个位置': 'Place it here', '替换下面这张图': 'Replace the image underneath', '只是参考，不放进去': 'Only a reference, do not insert it',
+    '放这里': 'place here', '替换': 'replace', '参考': 'reference',
+    /* tools */
+    '浏览': 'Browse', '选句': 'Sentence', '选元素': 'Element', '改字': 'Edit', '画笔': 'Pen', '激光笔': 'Laser',
+    '选中文字可以评论；截图直接 ⌘V 粘贴，图片可以拖进来；用手写笔可以直接画': 'Select text to comment on it. Paste a screenshot with ⌘V or drop an image file on the page. A stylus draws directly',
+    '点任意位置，留下一条意见': 'Click anywhere to leave a comment at that point',
+    '拖一个矩形，圈出要讨论的区域': 'Drag a rectangle around the region you mean',
+    '点一句话就选中整句，可以连续点；Esc 退出': 'Click a sentence to select all of it; keep clicking for more. Esc to stop',
+    '点一张图、一个表格或一段文字，选中整个元素；Esc 退出': 'Click a figure, a table or a paragraph to select the whole element. Esc to stop',
+    '点一段文字直接修改，回车完成，Esc 放弃；改动会记录成一条标注': 'Click a piece of text and retype it. Enter to finish, Esc to discard. The change is recorded as a note',
+    '随手画，连续几笔算一条；Esc 退出': 'Draw freehand; strokes made close together count as one note. Esc to stop',
+    '从一处拖到另一处，表示“移到这里”或“这两处有关”': 'Drag from one place to another: “move this there” or “these belong together”',
+    '红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。不会记成标注，翻页照常用方向键；Esc 退出': 'A red dot follows the pointer. Hold and drag to draw a circle that fades after a moment. Nothing is recorded, and the arrow keys still turn pages. Esc to stop',
+    '这种文件里没有可以选的文字，请用点评、框选或画笔': 'This kind of file has no selectable text. Use Pin, Box or Pen',
+    '图片里没有元素可选，请用框选': 'An image has no elements to select. Use Box',
+    '只有 HTML 能直接改字。PDF 和图片请选中文字后写“改成…”': 'Only HTML can be retyped in place. In a PDF or an image, select the text and fill in “Change to”',
+    /* one-click comments */
+    '删掉这句': 'Delete this sentence', '太长，缩短': 'Too long, shorten', '换个说法': 'Rephrase', '看不懂，说清楚': 'Unclear, explain', '加粗强调': 'Make it bold',
+    '放大': 'Bigger', '缩小': 'Smaller', '换一张图': 'Use a different image', '裁掉留白': 'Crop the white space', '加图注': 'Add a caption',
+    '字太小': 'Text too small', '太挤': 'Too crowded', '对齐': 'Align',
+    '内容太多': 'Too much content', '太空': 'Too empty', '换个版式': 'Change the layout', '加一张图': 'Add an image', '这页很好': 'This page is good',
+    '移到箭头指的位置': 'Move to where the arrow points', '两处对调': 'Swap these two', '这两处要对应起来': 'These two should match',
+    '放大一点': 'A bit bigger', '缩小一点': 'A bit smaller', '只要图的一部分': 'Use only part of the image', '配一句图注': 'Add a one-line caption',
+    '从论文里找图': 'Take a figure from the paper', '用表格': 'Use a table', '只放一句话和一张图': 'Just one sentence and one image',
+    /* punctuation and page labels */
+    '：': ': ', '；': '; ', '｜': ' | ', '（': ' (', '）': ')',
+    '第 {n} 页': 'Page {n}', '备用页 {n}': 'Backup {n}', '整页': 'Whole page', '{label} · 共 {n} 页': '{label} · {n} page{s}',
+    '前面加一页': 'Add page before', '后面加一页': 'Add page after', '{page}之前': 'before {page}', '{page}之后': 'after {page}',
+    /* toolbar */
+    '选一张图片放到这一页': 'Choose an image file to put on this page',
+    '把剪贴板里的截图放到这一页，也可以直接按 ⌘V': 'Put the screenshot from the clipboard on this page. You can also just press ⌘V',
+    '贴截图': 'Paste', '撤销 ⌘Z': 'Undo ⌘Z', '重做 ⇧⌘Z': 'Redo ⇧⌘Z',
+    '缩小|zoom': 'Zoom out', '放大|zoom': 'Zoom in', '整页宽度适应窗口': 'Fit the page width to the window', '适应': 'Fit',
+    '全屏演示：隐藏工具栏、侧栏和标注，只留幻灯片和激光笔': 'Present full screen: hides the toolbar, the sidebar and the notes, leaving the slides and the laser pointer',
+    '演示': 'Present', '收起或展开右侧栏': 'Hide or show the sidebar', '侧栏': 'Sidebar', '帮助': 'Help',
+    '复制给 AI 的指令': 'Copy for AI', '复制标注文字': 'Copy notes', '归档并清空': 'Archive',
+    '复制一条指令，粘贴给 AI 就会按标注改': 'Copy an instruction. Paste it to your AI agent and it applies the notes',
+    '把标注复制成纯文字': 'Copy the notes as plain text',
+    '不经过 AI，直接结束这一轮；标注保存在 archive/ 里': 'Close this round without an agent. The notes are kept in archive/',
+    /* help */
+    '怎么标注': 'How to mark up',
+    '评论一句话': 'Comment on a sentence',
+    '按 <kbd>T</kbd> 后点那句话；或者直接选中文字，在弹出的小条里点“评论 / 改写 / 缩短 / 删掉”': 'Press <kbd>T</kbd> and click the sentence. Or select any text and choose Comment, Rewrite, Shorten or Delete from the small bar',
+    '直接改字': 'Retype text',
+    '按 <kbd>W</kbd> 后点一段文字，就地修改，回车完成（只对 HTML）': 'Press <kbd>W</kbd>, click the text, edit it in place and press Enter (HTML only)',
+    '评论图或一块内容': 'Comment on a figure or a block',
+    '<kbd>E</kbd> 点它选中整个元素；<kbd>C</kbd> 在任意位置放一个点；<kbd>R</kbd> 拖一个框': '<kbd>E</kbd> and a click select a whole element; <kbd>C</kbd> drops a pin anywhere; <kbd>R</kbd> drags a box',
+    '加外部截图': 'Add a screenshot',
+    '截图后按 <kbd>⌘V</kbd>，图会出现在这一页上，拖动调整位置和大小。也可以把图片文件拖进来，或点“加图”。拖到已有的图上表示替换它': 'Take a screenshot and press <kbd>⌘V</kbd>. It lands on this page; drag it to move or resize. You can also drop an image file on the page, or click Image. Dropping it on an existing image means “replace this one”',
+    '给某条意见配图': 'Attach a picture to a note',
+    '先点进那条意见的输入框再粘贴，或把图片拖到那张卡片上': 'Click into the text box of that note and paste, or drop the image on its card',
+    '画和箭头': 'Draw, arrows',
+    '<kbd>P</kbd> 随手画，<kbd>A</kbd> 从一处拖到另一处。用 Apple Pencil 时不用选工具，直接画': '<kbd>P</kbd> draws freehand, <kbd>A</kbd> drags an arrow from one place to another. With an Apple Pencil you do not pick a tool: just draw',
+    '全屏演示': 'Present',
+    '点“演示”或按 <kbd>F</kbd>：全屏，只留幻灯片和激光笔，工具栏、侧栏和标注都隐藏。<kbd>←</kbd> <kbd>→</kbd> 或空格翻页，<kbd>V</kbd> 换回普通鼠标，<kbd>Esc</kbd> 或 <kbd>F</kbd> 退出': 'Click Present or press <kbd>F</kbd>: full screen with only the slides and the laser pointer; the toolbar, the sidebar and the notes are hidden. <kbd>←</kbd> <kbd>→</kbd> or Space turn pages, <kbd>V</kbd> gives the normal pointer back, <kbd>Esc</kbd> or <kbd>F</kbd> leaves',
+    '按 <kbd>L</kbd>，红点跟着鼠标走；按住拖动可以画圈，几秒后自动消失。只用来指给别人看，不会记成标注。讲的时候可以点“侧栏”把右边收起来': 'Press <kbd>L</kbd>: a red dot follows the pointer. Hold and drag to draw a circle that fades after a moment. It only shows people where to look and records nothing. While talking, click Sidebar to hide the right-hand side',
+    '加页、删页、挪页': 'Add, delete, move pages',
+    '右侧“前面加一页 / 后面加一页 / 移动 / 删除”，“更多”里有拆页、合并、移到备用页、这页不要动': 'In the sidebar: Add page before, Add page after, Move, Delete. More… has split, merge, move to backup and “do not touch this page”',
+    '持续查看讲稿': 'Keep speaker notes open',
+    '勾选右侧“讲稿始终展开”，翻页和刷新后都会保持展开。取消勾选可恢复按页手动展开。': 'Tick “Keep speaker notes open” in the sidebar and they stay open across pages and reloads. Untick it to open them by hand on each page.',
+    '★ 标为重要；“所有页”表示每一页都照这条改；<kbd>⌘Z</kbd> 撤销；<kbd>Esc</kbd> 回到浏览；<kbd>←</kbd> <kbd>→</kbd> 翻页': '★ marks a note as important; “All pages” means: do this on every page; <kbd>⌘Z</kbd> undoes; <kbd>Esc</kbd> returns to browsing; <kbd>←</kbd> <kbd>→</kbd> turn pages',
+    '交给 AI': 'Hand over to the AI',
+    '点右下角“复制给 AI 的指令”，粘贴给 Claude 或 Codex。它改完后，这里的“上一轮”会显示每条的处理结果': 'Click “Copy for AI” at the bottom right and paste it to Claude, Codex or another agent. When it is done, the tab “Previous round” shows what happened to each note',
+    '换语言': 'Language',
+    '点工具栏最右边的 EN 换成英文界面，再点“中文”换回来。复制给 AI 的指令和标注清单会跟着换': 'Click 中文 at the right end of the toolbar for the Chinese interface, and EN there to come back. The instruction for the AI and the list of notes follow the language',
+    '在 iPad 上用': 'On an iPad',
+    '在 iPad 的 Safari 里打开：': 'Open this in Safari on the iPad: ',
+    '启动时加 <code>--lan</code>，终端会给出 iPad 用的链接（同一个 Wi-Fi 或 Tailscale）': 'Start with <code>--lan</code> and the terminal prints a link for the iPad (same Wi-Fi or Tailscale)',
+    '。<br>离线：在 iPad 上用任何 App 手写批注 PDF，把批注件传回来，让 AI 运行 <code>review.py import 原件 批注件</code>': '.<br>Offline: annotate the PDF by hand in any iPad app, send the annotated copy back and have the agent run <code>review.py import ORIGINAL ANNOTATED</code>',
+    '标注保存在 <code>{dir}</code>。点空白处关闭。': 'Notes are saved in <code>{dir}</code>. Click outside this box to close it.',
+    /* status line */
+    '自动保存在 {dir}/。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。': 'Saved automatically in {dir}/. When you are done, click “Copy for AI” and paste it to your agent.',
+    '读取标注失败：本地服务没有响应': 'Could not load the notes: the local server is not responding',
+    '找回了上次没存上的 {n} 条标注': 'Recovered {n} note{s} that could not be saved last time',
+    '保存中…': 'Saving…',
+    '已保存 {n} 条。标完后点“复制给 AI 的指令”，粘贴给 Claude 或 Codex。': 'Saved {n} note{s}. When you are done, click “Copy for AI” and paste it to your agent.',
+    '没存上：本地服务没有响应。标注还在这个页面里，浏览器里也留了备份；服务恢复后会自动补存，先不要关这个页面。': 'Not saved: the local server is not responding. Your notes are still on this page and backed up in the browser. They are saved as soon as the server is back, so keep this page open.',
+    '没有可以撤销的操作': 'Nothing to undo',
+    '已删除这条，⌘Z 可以撤销': 'Note deleted. ⌘Z brings it back',
+    '演示模式 · ← → 或空格翻页 · L 激光笔 · V 普通鼠标 · Esc 或 F 退出': 'Presenting · ← → or Space turn pages · L laser · V normal pointer · Esc or F to leave',
+    '已记下这处改字。可以在右侧补一句原因': 'Edit recorded. You can add the reason on the right',
+    '这里没有文字。评论图片或空白处请用“选元素”或“点评”': 'There is no text here. To comment on an image or an empty spot, use Element or Pin',
+    '这里选不到单独的元素，请用“框选”': 'No single element can be selected here. Use Box',
+    '这里没有可以改的文字': 'There is no text to edit here',
+    '已经是最外面一层了': 'This is already the outermost element',
+    '图片上传失败（支持 png、jpg、gif、webp、pdf）': 'Upload failed (png, jpg, gif, webp and pdf are supported)',
+    '已标记：用这张图替换原图。右侧可以改成“放在这个位置”': 'Marked: replace the original image with this one. You can change that to “Place it here” on the right',
+    '图已放到这一页，拖动调整位置，拖右下角调整大小': 'The image is on this page. Drag it to move it; drag its bottom-right corner to resize',
+    '剪贴板里没有图片。先截图到剪贴板（⌃⇧⌘4），再按 ⌘V': 'No image on the clipboard. Copy a screenshot first (on a Mac: ⌃⇧⌘4), then press ⌘V',
+    '浏览器不让直接读剪贴板，请直接按 ⌘V 粘贴': 'The browser does not allow reading the clipboard here. Press ⌘V to paste instead',
+    '本地服务没有响应': 'The local server is not responding',
+    '把当前 {n} 条标注归档并清空？（归档后还能在 archive/ 里找到）': 'Archive the current {n} note{s} and start clean? (They stay available in archive/.)',
+    '已归档并清空': 'Archived. Ready for a new round',
+    '指令已复制。粘贴给 Claude 或 Codex 就会按标注改': 'Instruction copied. Paste it to Claude, Codex or another agent and it applies your notes',
+    '标注文字已复制': 'Notes copied as text',
+    '打不开这个文件': 'Cannot open this file',
+    /* marks on the page */
+    '图片': 'Image', '手写': 'handwriting', '已改字': 'edited', '改写': 'Rewrite', '缩短': 'Shorten',
+    /* cards */
+    '标为重要': 'Mark as important', '删除这条': 'Delete this note', '删除': 'Delete',
+    '改成（可留空，只写意见）': 'Change to (optional; a comment alone is fine)', '原文': 'Original', '改成': 'Change to',
+    '从 {a} → 到 {b}': 'From {a} → to {b}', '空白处': 'empty space',
+    '加在这页前面': 'Add before this page', '加在这页后面': 'Add after this page',
+    '新页标题': 'Title of the new page', '这一页的结论句': 'The takeaway of this page, in one sentence',
+    '移到': 'Move', '选一页…': 'choose a page…', '之前': 'before', '之后': 'after',
+    '这一页讲什么、放什么内容和图（图片可以直接粘贴在这里）': 'What this page says, and which content and figures go on it (you can paste images right here)',
+    '原因（可不填）': 'Reason (optional)', '说明（可不填）': 'Explanation (optional)', '对整页的意见': 'Your comment on the whole page',
+    '为什么这么改（可不填）': 'Why this change (optional)', '这张图怎么用：放多大、配什么文字（可不填）': 'How to use this image: how large, with what text (optional)',
+    '意见（可不填）': 'Comment (optional)', '手写内容在图里。想补充或打字说明可以写在这里': 'The handwriting is in the image. Add to it or type an explanation here if you like',
+    '画的是什么意思（可不填，AI 会看笔迹的位置）': 'What the drawing means (optional; the AI sees where the strokes are)', '写下意见…': 'Write your comment…',
+    '＋ 图片': '＋ Image', '每一页都照这条处理': 'Apply this note to every page', '所有页': 'All pages', '改为选中外面一层': 'Select the enclosing element instead', '选大一层': 'Select parent',
+    /* sidebar */
+    '本页': 'This page', '全部': 'All', '总体意见|tab': 'General', '总体意见': 'General comments', '上一轮': 'Previous round',
+    '文件已经更新。<a data-reload>点这里刷新</a>看新版本。': 'The file has changed. <a data-reload>Reload it</a> to see the new version.',
+    '这些标注是针对旧版文件写的，位置可能已经对不上。处理完后请点“归档并清空”。': 'These notes were made on an older version of the file, so their positions may no longer match. Once they are dealt with, click “Archive”.',
+    '改讲稿': 'Speaker notes', '移动': 'Move', '更多…': 'More…',
+    '翻页和刷新后保持展开；取消后可手动展开本页讲稿': 'Stays open across pages and reloads. Untick to open the notes of each page by hand',
+    '讲稿始终展开': 'Keep speaker notes open', '本页讲稿 · {n} 词': 'Speaker notes · {n} word{s}', ' · 计划 {t} 秒': ' · planned {t} s',
+    '这里还没有标注。': 'No notes here yet.',
+    '· <b>选句 T</b>：点一句话就能评论；也可以直接选中文字': '· <b>Sentence T</b>: click a sentence to comment on it, or just select some text',
+    '· <b>改字 W</b>：点一段文字直接改': '· <b>Edit W</b>: click a piece of text and retype it',
+    '：评论一个位置或一块区域': ': comment on a point or a region',
+    '· <b>截图</b>：截图后按 ⌘V，或把图片拖进来': '· <b>Screenshot</b>: take one and press ⌘V, or drop an image file here',
+    '· <b>画笔 P</b> / <b>箭头 A</b>：随手画、指位置': '· <b>Pen P</b> / <b>Arrow A</b>: draw freehand, point from one place to another',
+    '· 上面的按钮：在前面或后面加页、移动、删除': '· The buttons above: add a page before or after, move, delete',
+    '对整个文件的意见': 'Comments on the file as a whole', '新增：': 'New: ', '（未命名）': '(untitled)', '删': 'del', '移': 'move',
+    '上一轮的 {n} 条标注和处理结果。': 'The previous round: {n} note{s} and what was done about each.', '修改说明': 'Summary',
+    '已改': 'Done', '部分已改': 'Partly done', '没有改': 'Not done', '没有记录处理结果': 'No result was recorded'
+  };
+}
 })();
