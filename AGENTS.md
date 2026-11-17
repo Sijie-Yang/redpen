@@ -95,13 +95,19 @@ Before archiving, write into `annotations.json`:
   reviewer wrote their notes in, on what you changed, or why you did not;
 - at the top level: `"summary"`: one or two sentences on the round.
 
+The reviewer may keep adding notes while you work. So read `annotations.json` again right before you write into it, and
+change it in place: do not write back a copy you read earlier, which would drop what was added since.
+
 Then run:
 
     python3 review.py archive "<file>" --summary "one line on what changed"
 
-This moves the notes to `archive/`. The review page, if open, picks that up within a few seconds, shows your replies
-under "Previous round" ("上一轮"), and offers to reload the rebuilt file. Report to the reviewer in their language: what
-changed, what you skipped and why.
+This moves the notes to `archive/`. Notes without a `"status"` are not archived when others have one: they were added
+after you read the round. They stay in `annotations.json`, the command says how many, and they are the next round: read
+them and apply them the same way (`--all` archives them too).
+
+The review page, if open, picks the archive up within a few seconds, shows your replies under "Previous round" ("上一轮"),
+and offers to reload the rebuilt file. Report to the reviewer in their language: what changed, what you skipped and why.
 
 ## Handwriting from an iPad (offline)
 

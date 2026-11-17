@@ -157,6 +157,9 @@ Keep the review page open while the agent works. A few seconds after it archives
 itself, offers to reload the changed file, and the tab **Previous round** shows each of your notes with the agent's
 reply: Done, Partly done or Not done, and why.
 
+You can keep marking up while the agent works. A note it did not get to is not archived with the round: it stays on
+the page for the next one.
+
 ![Replies after the round](../assets/screenshot-replies-en.png)
 
 If something is still not right, mark it up again and hand over again. Each round is kept in

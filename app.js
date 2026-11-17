@@ -113,7 +113,7 @@ rv-pop button:hover{background:#6B3FD4}
 
 /* ---------- state ---------- */
 const blank = () => ({ tool: 'Redpen', lang: LANG, file: INFO.path, kind: INFO.kind, build: INFO.build, updated: null, general: '', items: [] });
-let S = blank(), LAST = null, rev = '0', tool = 'browse', selId = null, tab = 'slide', saveT = null, dirty = false, drag = null;
+let S = blank(), LAST = null, lastAt = '', rev = '0', tool = 'browse', selId = null, tab = 'slide', saveT = null, dirty = false, drag = null;
 let penId = null, editing = null, editCancel = false, pre = null, noClick = 0, newBuild = false;
 let fd = null, fw = null, A = null, layer, svg, marks, hov, pop, G = null, curEl = null, adaptUntil = 0;
 const NOTES_PIN = 'rv-notes-pinned';
@@ -177,7 +177,7 @@ async function loadNotes() {
   try {
     const r = await fetch('api/annotations', { cache: 'no-store' }), j = await r.json();
     S = j && Array.isArray(j.items) ? Object.assign(blank(), j) : blank();
-    const l = await (await fetch('api/last', { cache: 'no-store' })).json(); LAST = l && Array.isArray(l.items) && l.items.length ? l : null;
+    const l = await (await fetch('api/last', { cache: 'no-store' })).json(); LAST = l && Array.isArray(l.items) && l.items.length ? l : null; lastAt = (l && l.archived) || '';
     rev = (await (await fetch('api/info', { cache: 'no-store' })).json()).rev;
   } catch (_) { setStatus(L('读取标注失败：本地服务没有响应'), 'err'); return; }
   hist.length = 0; fut.length = 0; selId = null; penId = null; dirty = false;
@@ -192,11 +192,30 @@ async function loadNotes() {
 /* Unsaved notes are mirrored in the browser, so a stopped server or a reload cannot lose them. */
 const DRAFT = 'rv-draft:' + INFO.path, gone = new Set();
 function mirror() { try { localStorage.setItem(DRAFT, JSON.stringify({ t: Date.now(), S })); } catch (_) {} }
-function mergeIn(other) {   /* add notes this page does not have (saved by another page); returns how many */
-  const have = new Set(S.items.map(i => i.id)); let n = 0;
-  (other.items || []).forEach(i => { if (i && i.id && !have.has(i.id) && !gone.has(i.id)) { S.items.push(i); n++; } });
+function mergeIn(other) {   /* add notes this page does not have (saved by another page), and take over what an agent wrote on the others; returns how many were added */
+  const mine = new Map(S.items.map(i => [i.id, i])); let n = 0;
+  (other.items || []).forEach(i => {
+    if (!i || !i.id) return; const m = mine.get(i.id);
+    if (m) { if (i.status) { m.status = i.status; m.reply = i.reply; } }
+    else if (!gone.has(i.id)) { S.items.push(i); n++; }
+  });
   if (!S.general && other.general) S.general = other.general;
+  if (other.summary) S.summary = other.summary;
   return n;
+}
+async function closed() {   /* true when a round was archived since this page last looked: its notes leave this page, the others stay */
+  const l = await (await fetch('api/last', { cache: 'no-store' })).json(), at = (l && l.archived) || '';
+  if (at === lastAt) return false;
+  const done = new Set((l.items || []).map(i => i.id));
+  S.items = S.items.filter(i => !done.has(i.id)); if (S.general === (l.general || '')) S.general = ''; delete S.summary;
+  LAST = Array.isArray(l.items) && l.items.length ? l : null; lastAt = at;
+  hist.length = 0; fut.length = 0; if (!byId(selId)) selId = null; if (!byId(penId)) penId = null;
+  return true;
+}
+async function nextRound() {   /* the round was archived: read the notes again, and keep those of this page that are neither archived nor in the file */
+  const mine = S.items; await loadNotes();
+  const there = new Set(S.items.concat((LAST || {}).items || []).map(i => i.id)), lost = mine.filter(i => !there.has(i.id) && !gone.has(i.id));
+  if (lost.length) { S.items.push(...lost); save(); if (fd) { syncEdits(); render(); } }
 }
 function save() { dirty = true; mirror(); setStatus(L('保存中…')); clearTimeout(saveT); saveT = setTimeout(flush, 350); }
 async function flush() {
@@ -205,9 +224,9 @@ async function flush() {
   try {
     const post = () => fetch('api/annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, S, { _base: rev }), null, 1) });
     let r = await post();
-    if (r.status === 409) {   /* another page saved in between: keep both */
-      const j = await r.json(), n = mergeIn(j.current || {}); rev = j.rev; r = await post();
-      if (n && fd) { syncEdits(); render(); }
+    if (r.status === 409) {   /* another page saved in between: keep both. An agent archived the round in between: only what it did not get stays */
+      const j = await r.json(), shut = await closed(), n = mergeIn(j.current || {}); rev = j.rev; r = await post();
+      if ((n || shut) && fd) { syncEdits(); updUndo(); render(); }
     }
     if (!r.ok) throw new Error(r.status);
     rev = (await r.json()).rev; dirty = false; try { localStorage.removeItem(DRAFT); } catch (_) {}
@@ -229,7 +248,8 @@ setInterval(async () => {   /* the file was rebuilt, or an agent archived the no
     const j = await (await fetch('api/info', { cache: 'no-store' })).json();
     if (j.build !== INFO.build) { INFO.build = j.build; newBuild = true; renderSide(); }
     if (j.rev !== rev && !dirty && !drag && !editing) {
-      if (j.rev === '0') await loadNotes();   /* archived by the agent: start the next round */
+      const l = await (await fetch('api/last', { cache: 'no-store' })).json();
+      if (j.rev === '0' || ((l && l.archived) || '') !== lastAt) await nextRound();   /* archived by the agent: start the next round */
       else { const cur = await (await fetch('api/annotations', { cache: 'no-store' })).json(); rev = j.rev; if (mergeIn(cur) && fd) { syncEdits(); render(); } }
     }
   } catch (_) {}
@@ -848,7 +868,12 @@ async function copyFrom(url, msg) {
 async function clearAll() {
   if (!S.items.length && !S.general) return;
   if (!confirm(L('把当前 {n} 条标注归档并清空？（归档后还能在 archive/ 里找到）', { n: S.items.length }))) return;
-  try { await flush(); await fetch('api/archive', { method: 'POST' }); } catch (_) {}
+  try {   /* archive only what the reviewer just confirmed: if saving brings in notes from another page, or they change before the archive, show that first */
+    const was = S.items.map(i => i.id).join(); await flush();
+    let r = S.items.map(i => i.id).join() === was && await fetch('api/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ _base: rev }) });
+    if (r && r.status === 409) { const j = await r.json(); await closed(); mergeIn(j.current || {}); rev = j.rev; r = false; }
+    if (!r) { if (fd) { syncEdits(); updUndo(); render(); } setStatus(L('标注刚被另一个页面或 AI 改过，这次没有归档。看一眼再点一次。'), 'err'); return; }
+  } catch (_) {}
   await loadNotes(); setStatus(L('已归档并清空'), 'ok');
 }
 top.addEventListener('click', e => {
@@ -1085,6 +1110,7 @@ function english() {
     '本地服务没有响应': 'The local server is not responding',
     '把当前 {n} 条标注归档并清空？（归档后还能在 archive/ 里找到）': 'Archive the current {n} note{s} and start clean? (They stay available in archive/.)',
     '已归档并清空': 'Archived. Ready for a new round',
+    '标注刚被另一个页面或 AI 改过，这次没有归档。看一眼再点一次。': 'The notes were just changed from another page or by an agent, so nothing was archived. Check them and click Archive again.',
     '指令已复制。粘贴给 Claude 或 Codex 就会按标注改': 'Instruction copied. Paste it to Claude, Codex or another agent and it applies your notes',
     '标注文字已复制': 'Notes copied as text',
     '打不开这个文件': 'Cannot open this file',

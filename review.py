@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 TOOL = Path(__file__).resolve().parent
 IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 UPLOAD = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
@@ -146,6 +146,9 @@ EN = {
     "  iPad 或其他设备（同一个 Wi-Fi 或 Tailscale）打开: {url}": "  On an iPad or another device (same Wi-Fi or Tailscale) open: {url}",
     "  按 Ctrl+C 停止": "  Ctrl+C stops the server", "\n已停止": "\nStopped",
     "已归档到 {dest}": "Archived to {dest}", "没有需要归档的标注": "There are no notes to archive",
+    "有 {n} 条标注没有写 status（多半是你读完之后审阅者新加的），没有归档，还留在 {ann} 里。把它们当作下一轮：重新读一遍再处理；确实要一起归档就加 --all。":
+        "Notes without a status: {n} (most likely the reviewer added them after you read the round). They were not archived and are "
+        "still in {ann}. Treat them as the next round: read them again and apply them. To archive them as well, add --all.",
 }
 UI_LANG = None    # set by --lang or REDPEN_LANG: the language a review page starts in, until the reviewer switches it there
 _lang = None
@@ -404,13 +407,20 @@ class Target:
         except Exception:
             return {}
 
-    def do_archive(self, summary=None):
+    def do_archive(self, summary=None, split=False):
+        """Move the round to archive/. With split, when some notes carry a status and others do not, the ones without were
+        added after the agent read the round (or it left them out): they stay in annotations.json as the next round.
+        Returns the file in archive/ and how many notes stayed."""
         data = self.load()
         if data is None:
-            return None
+            return None, 0
         hist = self.review / "history"
         hist.mkdir(parents=True, exist_ok=True)
         shutil.copy2(self.ann, hist / f"annotations-{time.strftime('%Y%m%d-%H%M%S')}-before-archive.json")
+        answered = [i for i in data["items"] if isinstance(i, dict) and i.get("status")]
+        rest = [i for i in data["items"] if i not in answered] if split and answered else []
+        if rest:
+            data["items"] = answered
         if summary:
             data["summary"] = summary
         data["archived"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -418,10 +428,18 @@ class Target:
         dest = self.archive / f"annotations-{time.strftime('%Y%m%d-%H%M%S')}.json"
         dest.write_text(json.dumps(data, ensure_ascii=False, indent=1))
         dest.with_suffix(".md").write_text(self.markdown(data))
+        if rest:
+            keep = {k: v for k, v in data.items() if k not in ("summary", "archived")}
+            keep.update(items=rest, general="")
+            tmp = self.ann.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(keep, ensure_ascii=False, indent=1))
+            os.replace(tmp, self.ann)
+            self.md.write_text(self.markdown(keep))
+            return dest, len(rest)
         self.ann.unlink()
         if self.md.exists():
             self.md.unlink()
-        return dest
+        return dest, 0
 
     # -- text for people and agents --
     def lang(self, data=None, lang=None):
@@ -850,7 +868,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.send(400, {"error": "bad annotations"})
             base = data.pop("_base", None)
-            if base is not None and t.ann.exists() and str(base) != t.rev():
+            if base is not None and str(base) != t.rev():   # saved or archived by someone else since this page last read it
                 return self.send(409, {"error": "changed", "rev": t.rev(), "current": t.load() or {}})
             t.save(data)
             return self.send(200, {"ok": True, "items": len(data["items"]), "rev": t.rev()})
@@ -869,7 +887,13 @@ class Handler(BaseHTTPRequestHandler):
             out.write_bytes(raw)
             return self.send(200, {"path": str(out), "url": f"/review/images/{quote(out.name)}"})
         if url.path == "/api/archive":
-            dest = t.do_archive()
+            try:
+                base = json.loads(self.body(MAX_JSON) or b"{}").get("_base")
+            except Exception:
+                base = None
+            if base is not None and str(base) != t.rev():
+                return self.send(409, {"error": "changed", "rev": t.rev(), "current": t.load() or {}})
+            dest, _ = t.do_archive()
             return self.send(200, {"ok": True, "archived": str(dest) if dest else None})
         self.send(404, {"error": "not found"})
 
@@ -939,6 +963,7 @@ def main(argv=None):
     ap.add_argument("--root", help="folder to serve, when the HTML loads files from a parent folder (relative to FILE's folder)")
     ap.add_argument("--page", action="store_true", help="treat an HTML file as one scrolling page, not slides")
     ap.add_argument("--summary", help="archive: one line on what was changed")
+    ap.add_argument("--all", action="store_true", help="archive: also archive notes that have no status (by default they stay for the next round)")
     ap.add_argument("--lang", choices=("en", "zh"), help="language of the review page and of what is printed here "
                     "(default: REDPEN_LANG, else the system language; the page has its own switch, which is remembered)")
     a = ap.parse_args(argv)
@@ -956,8 +981,11 @@ def main(argv=None):
     elif cmd == "import":
         import_marked(t, a.marked)
     elif cmd == "archive":
-        dest = t.do_archive(a.summary)
+        dest, left = t.do_archive(a.summary, split=not a.all)
         print(tr("已归档到 {dest}", dest=dest) if dest else tr("没有需要归档的标注"))
+        if left:
+            print(tr("有 {n} 条标注没有写 status（多半是你读完之后审阅者新加的），没有归档，还留在 {ann} 里。"
+                     "把它们当作下一轮：重新读一遍再处理；确实要一起归档就加 --all。", n=left, ann=t.ann))
     else:
         serve(t, a.port, not a.no_open, a.lan)
 
