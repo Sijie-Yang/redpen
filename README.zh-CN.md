@@ -16,7 +16,7 @@
   <a href="AGENTS.md">给 AI 的说明</a>
 </p>
 
-![在 Redpen 里批注一页幻灯片](assets/screenshot-annotate.png)
+![30 秒看懂 Redpen：标注一页幻灯片，交给 AI，看它的回复](assets/demo-zh.gif)
 
 ## 为什么做这个
 
@@ -71,6 +71,8 @@ python3 redpen/review.py 文件路径
 | PPT、Keynote | 先导出成 PDF |
 
 ## 标注
+
+![在 Redpen 里批注一页幻灯片](assets/screenshot-annotate.png)
 
 | 想做的事 | 操作 |
 |---|---|

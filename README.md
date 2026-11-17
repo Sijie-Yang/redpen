@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/dependencies-none-E5372B" alt="No dependencies">
 </p>
 
-![Marking up a slide in Redpen](assets/screenshot-annotate-en.png)
+![Redpen in 30 seconds: mark up a slide, hand the notes to an agent, read its replies](assets/demo.gif)
 
 ## Why
 
@@ -84,6 +84,8 @@ on Debian and Ubuntu).
 | PowerPoint, Keynote | Export to PDF first |
 
 ## Marking up
+
+![Marking up a slide in Redpen](assets/screenshot-annotate-en.png)
 
 | You want to | Do this |
 |---|---|
